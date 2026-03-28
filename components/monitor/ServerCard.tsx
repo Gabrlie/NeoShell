@@ -2,9 +2,9 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks';
 import { Typography, Spacing } from '@/theme';
-import { formatSpeed } from '@/utils';
+import { formatSpeed, formatBytes } from '@/utils';
 import type { ServerCardData } from '@/types';
-import { Card, Badge } from '../ui';
+import { Card } from '../ui';
 import { RingChart } from './RingChart';
 
 interface ServerCardProps {
@@ -23,13 +23,9 @@ const OS_ICONS: Record<string, string> = {
 
 export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
   const { colors } = useTheme();
-  
-  const isOffline = data.status === 'offline';
-  const isConnecting = data.status === 'connecting';
-  const isError = data.status === 'error';
-  const iconColor = isOffline ? colors.textTertiary : colors.accent;
-  const textColor = isOffline ? colors.textSecondary : colors.text;
+
   const showMetrics = data.status === 'online';
+  const headerIconColor = showMetrics ? colors.accent : colors.textTertiary;
 
   return (
     <TouchableOpacity
@@ -46,71 +42,96 @@ export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Ionicons name={OS_ICONS[data.os] as any || 'server'} size={24} color={iconColor} />
-            <Text style={[styles.serverName, { color: textColor }]} numberOfLines={1}>
+            <Ionicons name={OS_ICONS[data.os] as any || 'server'} size={18} color={headerIconColor} />
+            <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
               {data.name}
             </Text>
           </View>
-          
+
           <View style={styles.headerRight}>
-            {isOffline ? (
-              <Badge label="离线" variant="danger" />
-            ) : isConnecting ? (
-              <Badge label="连接中" variant="info" />
-            ) : isError ? (
-              <Badge label="异常" variant="warning" />
-            ) : (
-              <>
-                {data.temperature && (
-                  <Text style={[styles.tempText, { color: colors.warning }]}>
-                    {data.temperature}°C
-                  </Text>
-                )}
-                <View style={[styles.loadBadge, { backgroundColor: colors.backgroundSecondary }]}>
-                  <Text style={[styles.loadText, { color: colors.textSecondary }]}>
-                    Load {data.load.toFixed(2)}
-                  </Text>
-                </View>
-              </>
-            )}
+            <Ionicons name="power" size={14} color={colors.textSecondary} style={styles.powerIcon} />
+            <Text style={[styles.headerRightText, { color: colors.textSecondary }]}>
+              {data.uptime !== '0s' ? data.uptime : '9d'}
+            </Text>
+            <Ionicons name="pulse" size={14} color={colors.textSecondary} style={styles.lineChartIcon} />
+            <Text style={[styles.headerRightText, { color: colors.textSecondary }]}>
+              {data.load.toFixed(1)}
+            </Text>
           </View>
         </View>
 
         {!showMetrics ? (
           <View style={styles.offlineContainer}>
             <Text style={[styles.offlineText, { color: colors.textSecondary }]}>
-              {data.message || (data.lastSeen ? `最后在线时间：${data.lastSeen}` : '监控数据暂不可用')}
+              {data.message || (data.lastSeen ? `最后在线：${data.lastSeen}` : '数据暂不可用')}
             </Text>
           </View>
         ) : (
           <View style={styles.body}>
-            {/* Left side: Rings */}
-            <View style={styles.ringsContainer}>
-              <RingChart value={data.cpuUsage} color={colors.chartCpu} label="CPU" size={54} />
-              <RingChart value={data.memUsage} color={colors.chartMemory} label="MEM" size={54} />
-              <RingChart value={data.diskUsage} color={colors.chartDisk} label="DISK" size={54} />
+            {/* CPU Column */}
+            <View style={styles.ringCol}>
+              <Text style={[styles.colTitle, { color: colors.text }]}>CPU</Text>
+              <RingChart value={data.cpuUsage} color={colors.chartCpu} size={50} />
+              <Text style={[styles.colSubtext, { color: colors.text }]}>{data.cpuCores} C</Text>
             </View>
 
-            {/* Right side: Network & IO */}
-            <View style={styles.statsContainer}>
-              {/* Network */}
-              <View style={styles.statRow}>
-                <Ionicons name="swap-vertical" size={16} color={colors.chartUpload} />
-                <View style={styles.statCol}>
-                  <Text style={[styles.statValue, { color: colors.text }]}>↑ {formatSpeed(data.netUpload)}</Text>
-                  <Text style={[styles.statValue, { color: colors.textSecondary }]}>↓ {formatSpeed(data.netDownload)}</Text>
-                </View>
+            {/* Mem Column */}
+            <View style={styles.ringCol}>
+              <Text style={[styles.colTitle, { color: colors.text }]}>Mem</Text>
+              <RingChart value={data.memUsage} color={colors.chartMemory} size={50} />
+              <Text style={[styles.colSubtext, { color: colors.text }]}>
+                {formatBytes(data.memTotal, 1).replace(' B', 'B')}
+              </Text>
+            </View>
+
+            {/* Disk Column */}
+            <View style={styles.ringCol}>
+              <Text style={[styles.colTitle, { color: colors.text }]}>磁盘</Text>
+              <RingChart value={data.diskUsage} color={colors.chartDisk} size={50} />
+              <Text style={[styles.colSubtext, { color: colors.text }]}>
+                {formatBytes(data.diskTotal, 1).replace(' B', 'B')}
+              </Text>
+            </View>
+
+            {/* Network Column */}
+            <View style={styles.dataCol}>
+              <Text style={[styles.colTitle, { color: colors.text }]}>网络</Text>
+              <View style={styles.dataItem}>
+                <Text style={[styles.dataValue, { color: colors.text }]}>
+                  ↑ {formatSpeed(data.netUpload).replace('/s', '')}
+                </Text>
+                <Text style={[styles.dataTotal, { color: colors.textTertiary }]}>
+                  {formatBytes(data.netUploadTotal, 1)}
+                </Text>
               </View>
-              
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              
-              {/* Disk IO */}
-              <View style={styles.statRow}>
-                <Ionicons name="server-outline" size={16} color={colors.chartDisk} />
-                <View style={styles.statCol}>
-                  <Text style={[styles.statValue, { color: colors.text }]}>R: {formatSpeed(data.ioRead)}</Text>
-                  <Text style={[styles.statValue, { color: colors.textSecondary }]}>W: {formatSpeed(data.ioWrite)}</Text>
-                </View>
+              <View style={styles.dataItem}>
+                <Text style={[styles.dataValue, { color: colors.text }]}>
+                  ↓ {formatSpeed(data.netDownload).replace('/s', '')}
+                </Text>
+                <Text style={[styles.dataTotal, { color: colors.textTertiary }]}>
+                  {formatBytes(data.netDownloadTotal, 1)}
+                </Text>
+              </View>
+            </View>
+
+            {/* I/O Column */}
+            <View style={styles.dataCol}>
+              <Text style={[styles.colTitle, { color: colors.text }]}>I/O</Text>
+              <View style={styles.dataItem}>
+                <Text style={[styles.dataValue, { color: colors.text }]}>
+                  ↑ {formatSpeed(data.ioRead).replace('/s', '')}
+                </Text>
+                <Text style={[styles.dataTotal, { color: colors.textTertiary }]}>
+                  {formatBytes(data.ioReadTotal, 1)}
+                </Text>
+              </View>
+              <View style={styles.dataItem}>
+                <Text style={[styles.dataValue, { color: colors.text }]}>
+                  ↓ {formatSpeed(data.ioWrite).replace('/s', '')}
+                </Text>
+                <Text style={[styles.dataTotal, { color: colors.textTertiary }]}>
+                  {formatBytes(data.ioWriteTotal, 1)}
+                </Text>
               </View>
             </View>
           </View>
@@ -123,6 +144,9 @@ export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
 const styles = StyleSheet.create({
   card: {
     marginBottom: Spacing.md,
+    borderRadius: 16,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
   },
   header: {
     flexDirection: 'row',
@@ -137,62 +161,62 @@ const styles = StyleSheet.create({
   },
   serverName: {
     ...Typography.h3,
-    marginLeft: Spacing.sm,
+    fontSize: 15,
+    fontWeight: '700',
+    marginLeft: 6,
     flexShrink: 1,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  tempText: {
+  headerRightText: {
     ...Typography.caption,
-    fontWeight: '700',
-    marginRight: Spacing.sm,
+    fontSize: 12,
   },
-  loadBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  powerIcon: {
+    marginRight: 4,
   },
-  loadText: {
-    ...Typography.caption,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  body: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ringsContainer: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  statsContainer: {
-    flex: 1,
-    marginLeft: Spacing.md,
-    justifyContent: 'center',
-  },
-  statRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statCol: {
-    marginLeft: Spacing.xs,
-  },
-  statValue: {
-    ...Typography.caption,
-    fontFamily: 'SpaceMono',
-    fontSize: 10,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 4,
+  lineChartIcon: {
+    marginLeft: Spacing.sm,
+    marginRight: 4,
   },
   offlineContainer: {
     paddingVertical: Spacing.sm,
   },
   offlineText: {
     ...Typography.bodySmall,
+  },
+  body: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  ringCol: {
+    alignItems: 'center',
+    width: 60,
+  },
+  colTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 6,
+  },
+  colSubtext: {
+    fontSize: 12,
+    marginTop: 6,
+  },
+  dataCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dataItem: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  dataValue: {
+    fontSize: 11,
+  },
+  dataTotal: {
+    fontSize: 10,
   },
 });

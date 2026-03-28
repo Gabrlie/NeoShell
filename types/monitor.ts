@@ -134,8 +134,14 @@ export interface ServerCardData {
   diskTotal: number;
   netUpload: number;
   netDownload: number;
+  netUploadTotal: number;
+  netDownloadTotal: number;
   ioRead: number;
   ioWrite: number;
+  ioReadTotal: number;
+  ioWriteTotal: number;
+  cpuCores: number;
+  uptime: string;
   message?: string;
   lastSeen?: string;
 }

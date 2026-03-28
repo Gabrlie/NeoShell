@@ -1,16 +1,24 @@
 import { useEffect, useMemo } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { useLocalSearchParams, router, Stack } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
-import { LineChart } from '@/components/monitor';
 import { Card } from '@/components/ui';
+import {
+  HeaderOverview,
+  CpuSection,
+  MemorySection,
+  DiskSection,
+  NetworkSection,
+} from '@/components/monitor';
 import { useServerMonitoring, useTheme } from '@/hooks';
 import { useMonitorStore, useServerStore } from '@/stores';
-import { BorderRadius, Spacing, Typography } from '@/theme';
-import { formatBytes, formatSpeed } from '@/utils';
+import { Spacing, Typography } from '@/theme';
 
 export default function MonitorDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const servers = useServerStore((state) => state.servers);
   const isHydrated = useServerStore((state) => state.isHydrated);
@@ -31,17 +39,6 @@ export default function MonitorDetailScreen() {
     enabled: Boolean(server),
   });
 
-  const cpuData = history.map((item) => ({ value: Number(item.cpu.usage.toFixed(1)) }));
-  const memData = history.map((item) => ({
-    value: Number((item.memory.used / 1024 / 1024 / 1024).toFixed(2)),
-  }));
-  const netUpData = history.map((item) => ({
-    value: Number((((item.network[0]?.uploadSpeed ?? 0) / 1024 / 1024)).toFixed(2)),
-  }));
-  const netDownData = history.map((item) => ({
-    value: Number((((item.network[0]?.downloadSpeed ?? 0) / 1024 / 1024)).toFixed(2)),
-  }));
-
   if (!server && isHydrated) {
     return (
       <View style={[styles.centerState, { backgroundColor: colors.background }]}>
@@ -55,154 +52,178 @@ export default function MonitorDetailScreen() {
     return (
       <View style={[styles.centerState, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.accent} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>正在获取监控数据</Text>
-        <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>首次打开会先初始化系统信息和监控快照。</Text>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>正在获取监控数据...</Text>
       </View>
     );
   }
 
+  // Parse History Data for Charts
+  const cpuData = history.map((item) => ({ value: Number(item.cpu.usage.toFixed(1)) }));
+  const memData = history.map((item) => ({
+    value: Number((item.memory.used / 1024 / 1024 / 1024).toFixed(2)),
+  }));
+  const netUpData = history.map((item) => ({
+    value: Number((((item.network[0]?.uploadSpeed ?? 0) / 1024 / 1024)).toFixed(2)),
+  }));
+  const netDownData = history.map((item) => ({
+    value: Number((((item.network[0]?.downloadSpeed ?? 0) / 1024 / 1024)).toFixed(2)),
+  }));
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>系统信息</Text>
-        <Card style={styles.card}>
-          <InfoRow label="主机名" value={systemInfo.hostname} />
-          <InfoRow label="OS" value={systemInfo.os} />
-          <InfoRow label="内核" value={systemInfo.kernel} />
-          <InfoRow label="架构" value={systemInfo.arch} />
-          <InfoRow label="CPU" value={`${systemInfo.cpuModel} · ${systemInfo.cpuCores} 核`} />
-          <InfoRow label="运行时间" value={systemInfo.uptime} />
-        </Card>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>CPU 趋势</Text>
-        <LineChart
-          data={cpuData}
-          color={colors.chartCpu}
-          title={`CPU 使用率 · 当前 ${snapshot.cpu.usage.toFixed(1)}%`}
-          suffix="%"
-          maxValue={100}
-        />
-        <View style={styles.sectionGap} />
-        <Card style={styles.card}>
-          <InfoRow label="1 分钟负载" value={snapshot.cpu.load[0].toFixed(2)} />
-          <InfoRow label="5 分钟负载" value={snapshot.cpu.load[1].toFixed(2)} />
-          <InfoRow label="15 分钟负载" value={snapshot.cpu.load[2].toFixed(2)} />
-          <InfoRow
-            label="温度"
-            value={snapshot.temperature.value ? `${snapshot.temperature.value.toFixed(1)}°C` : '不可用'}
-          />
-        </Card>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>内存趋势</Text>
-        <LineChart
-          data={memData}
-          color={colors.chartMemory}
-          title={`内存使用量 · 当前 ${formatBytes(snapshot.memory.used)}`}
-          suffix="GB"
-          maxValue={Math.ceil(snapshot.memory.total / 1024 / 1024 / 1024)}
-        />
-        <View style={styles.sectionGap} />
-        <Card style={styles.card}>
-          <InfoRow label="总内存" value={formatBytes(snapshot.memory.total)} />
-          <InfoRow label="已用" value={formatBytes(snapshot.memory.used)} />
-          <InfoRow label="可用" value={formatBytes(snapshot.memory.available)} />
-          <InfoRow label="缓存" value={formatBytes(snapshot.memory.cached)} />
-        </Card>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>存储与 IO</Text>
-        <Card style={styles.card}>
-          <InfoRow label="磁盘总量" value={formatBytes(snapshot.disk[0]?.total ?? 0)} />
-          <InfoRow label="磁盘已用" value={formatBytes(snapshot.disk[0]?.used ?? 0)} />
-          <InfoRow label="使用率" value={`${(snapshot.disk[0]?.usage ?? 0).toFixed(1)}%`} />
-          <InfoRow label="读取速率" value={formatSpeed(snapshot.diskIO.readSpeed)} />
-          <InfoRow label="写入速率" value={formatSpeed(snapshot.diskIO.writeSpeed)} />
-        </Card>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>网络趋势</Text>
-        <View style={styles.dualChartContainer}>
-          <LineChart
-            data={netUpData}
-            color={colors.chartUpload}
-            title={`上传 · 当前 ${formatSpeed(snapshot.network[0]?.uploadSpeed ?? 0)}`}
-            height={120}
-          />
-          <LineChart
-            data={netDownData}
-            color={colors.chartDownload}
-            title={`下载 · 当前 ${formatSpeed(snapshot.network[0]?.downloadSpeed ?? 0)}`}
-            height={120}
-          />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      {/* Custom Header */}
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+            <Ionicons name="chevron-back" size={24} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{server?.name}</Text>
         </View>
-        <View style={styles.sectionGap} />
-        <Card style={styles.card}>
-          <InfoRow label="接口" value={snapshot.network[0]?.interface ?? '--'} />
-          <InfoRow label="总上传" value={formatBytes(snapshot.network[0]?.uploadTotal ?? 0)} />
-          <InfoRow label="总下载" value={formatBytes(snapshot.network[0]?.downloadTotal ?? 0)} />
-        </Card>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.headerBtn}>
+            <Ionicons name="folder-outline" size={22} color={colors.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn}>
+            <Ionicons name="terminal-outline" size={22} color={colors.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn}>
+            <Ionicons name="settings-outline" size={22} color={colors.accent} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <View style={{ height: Spacing.xxl }} />
-    </ScrollView>
+      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
+        
+        {/* Top Overview */}
+        <HeaderOverview
+          osName={`${systemInfo.os} ${systemInfo.arch}`}
+          osIcon="logo-tux"
+          load1={snapshot.cpu.load[0]}
+          load5={snapshot.cpu.load[1]}
+          load15={snapshot.cpu.load[2]}
+          uptime={systemInfo.uptime}
+          cpuUsage={snapshot.cpu.usage}
+        />
+
+        {/* CPU Details */}
+        <CpuSection
+          usage={snapshot.cpu.usage}
+          coreUsage={snapshot.cpu.coreUsage || [snapshot.cpu.usage]} // Fallback if mock is missing
+          historyData={cpuData}
+          cores={systemInfo.cpuCores}
+        />
+
+        {/* Memory Details */}
+        <MemorySection
+          total={snapshot.memory.total}
+          used={snapshot.memory.used}
+          available={snapshot.memory.available}
+          cached={snapshot.memory.cached}
+          historyData={memData}
+        />
+
+        {/* Disk Details */}
+        <DiskSection disks={snapshot.disk} />
+
+        {/* Network Details */}
+        <NetworkSection
+          networks={snapshot.network}
+          upHistory={netUpData}
+          downHistory={netDownData}
+        />
+
+        {/* Tools */}
+        <View style={styles.toolsSection}>
+          <Text style={[styles.toolsTitle, { color: colors.textTertiary }]}>工具</Text>
+          <Card style={[styles.toolsCard, { backgroundColor: colors.cardElevated, borderColor: colors.border }]}>
+            <ToolButton icon="list" text="进程列表" color="#007AFF" />
+            <ToolButton icon="globe-outline" text="IP 地址" color="#34C759" />
+            <ToolButton icon="analytics" text="流量统计" color="#AF52DE" />
+          </Card>
+        </View>
+
+        <View style={{ height: Spacing.xxl * 2 }} />
+      </ScrollView>
+    </View>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function ToolButton({ icon, text, color }: { icon: any; text: string; color: string }) {
   const { colors } = useTheme();
-
   return (
-    <View style={styles.infoRow}>
-      <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: colors.text }]}>{value}</Text>
-    </View>
+    <TouchableOpacity style={styles.toolBtn}>
+      <View style={[styles.toolIconWrap, { backgroundColor: `${color}20` }]}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      <Text style={[styles.toolText, { color: colors.text }]}>{text}</Text>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: Spacing.lg,
   },
-  section: {
-    marginBottom: Spacing.xl,
+  header: {
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  sectionTitle: {
-    ...Typography.bodySmall,
-    textTransform: 'uppercase',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerBtn: {
+    padding: Spacing.sm,
+  },
+  headerTitle: {
+    ...Typography.h3,
+    marginLeft: 4,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  scrollContent: {
+    flex: 1,
+  },
+  scrollInner: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xxl,
+  },
+  toolsSection: {
+    marginTop: Spacing.md,
+  },
+  toolsTitle: {
+    fontSize: 12,
     fontWeight: '600',
     marginBottom: Spacing.sm,
-    letterSpacing: 1,
+    marginLeft: 4,
   },
-  card: {
-    gap: Spacing.sm,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
+  toolsCard: {
+    padding: Spacing.md,
     gap: Spacing.md,
+    borderRadius: 12,
   },
-  infoLabel: {
-    ...Typography.body,
+  toolBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  infoValue: {
+  toolIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  toolText: {
     ...Typography.body,
     fontWeight: '500',
-    flex: 1,
-    textAlign: 'right',
-  },
-  dualChartContainer: {
-    gap: Spacing.md,
-  },
-  sectionGap: {
-    height: Spacing.sm,
   },
   centerState: {
     flex: 1,

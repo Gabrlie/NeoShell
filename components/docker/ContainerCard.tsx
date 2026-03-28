@@ -134,7 +134,6 @@ const styles = StyleSheet.create({
   },
   imageText: {
     ...Typography.bodySmall,
-    fontFamily: 'SpaceMono',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -154,7 +153,6 @@ const styles = StyleSheet.create({
   portText: {
     ...Typography.caption,
     marginLeft: Spacing.xs,
-    fontFamily: 'SpaceMono',
   },
   actionBar: {
     flexDirection: 'row',

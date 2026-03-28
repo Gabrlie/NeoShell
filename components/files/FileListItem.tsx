@@ -109,7 +109,6 @@ const styles = StyleSheet.create({
   },
   detailText: {
     ...Typography.caption,
-    fontFamily: 'SpaceMono',
     fontSize: 11,
   },
   moreBtn: {

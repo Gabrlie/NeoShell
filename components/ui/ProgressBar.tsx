@@ -6,9 +6,11 @@ interface ProgressBarProps extends ViewProps {
   progress: number; // 0-100
   color?: string;
   label?: string;
+  trackColor?: string;
+  height?: number;
 }
 
-export function ProgressBar({ progress, color, label, style, ...rest }: ProgressBarProps) {
+export function ProgressBar({ progress, color, label, trackColor, height, style, ...rest }: ProgressBarProps) {
   const { colors } = useTheme();
   
   const clampedProgress = Math.max(0, Math.min(100, progress));
@@ -22,13 +24,14 @@ export function ProgressBar({ progress, color, label, style, ...rest }: Progress
           <Text style={[styles.value, { color: colors.text }]}>{clampedProgress.toFixed(1)}%</Text>
         </View>
       )}
-      <View style={[styles.track, { backgroundColor: colors.backgroundSecondary }]}>
+      <View style={[styles.track, { backgroundColor: trackColor || colors.backgroundSecondary, height: height || styles.track.height }]}>
         <View
           style={[
             styles.fill,
             {
               backgroundColor: activeColor,
               width: `${clampedProgress}%`,
+              height: height || styles.fill.height,
             },
           ]}
         />
