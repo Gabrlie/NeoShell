@@ -62,6 +62,14 @@ function RootLayoutNav() {
           name="modal"
           options={{ presentation: 'modal', title: '新增服务器' }}
         />
+        <Stack.Screen
+          name="settings/private-keys"
+          options={{ title: '私钥库', headerBackTitle: '返回' }}
+        />
+        <Stack.Screen
+          name="settings/private-keys/new"
+          options={{ title: '新增私钥', headerBackTitle: '返回' }}
+        />
       </Stack>
     </ThemeProvider>
   );

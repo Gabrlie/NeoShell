@@ -2,31 +2,13 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks';
 import { Typography, Spacing } from '@/theme';
-import { formatSpeed, formatBytes } from '@/utils';
+import { formatSpeed } from '@/utils';
+import type { ServerCardData } from '@/types';
 import { Card, Badge } from '../ui';
 import { RingChart } from './RingChart';
 
-export interface MockServerData {
-  id: string;
-  name: string;
-  os: 'linux' | 'windows' | 'ubuntu' | 'debian' | 'centos';
-  status: 'online' | 'offline';
-  temperature: number | null;
-  load: number;
-  cpuUsage: number;
-  memUsage: number;
-  memTotal: number;
-  diskUsage: number;
-  diskTotal: number;
-  netUpload: number;
-  netDownload: number;
-  ioRead: number;
-  ioWrite: number;
-  lastSeen?: string;
-}
-
 interface ServerCardProps {
-  data: MockServerData;
+  data: ServerCardData;
   onPress?: () => void;
   onLongPress?: () => void;
 }
@@ -43,20 +25,22 @@ export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
   const { colors } = useTheme();
   
   const isOffline = data.status === 'offline';
+  const isConnecting = data.status === 'connecting';
+  const isError = data.status === 'error';
   const iconColor = isOffline ? colors.textTertiary : colors.accent;
   const textColor = isOffline ? colors.textSecondary : colors.text;
+  const showMetrics = data.status === 'online';
 
   return (
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={onPress}
       onLongPress={onLongPress}
-      disabled={isOffline}
     >
       <Card
         style={[
           styles.card,
-          isOffline && { opacity: 0.7, backgroundColor: colors.backgroundSecondary }
+          !showMetrics && { opacity: 0.85, backgroundColor: colors.backgroundSecondary }
         ]}
       >
         {/* Header */}
@@ -71,6 +55,10 @@ export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
           <View style={styles.headerRight}>
             {isOffline ? (
               <Badge label="离线" variant="danger" />
+            ) : isConnecting ? (
+              <Badge label="连接中" variant="info" />
+            ) : isError ? (
+              <Badge label="异常" variant="warning" />
             ) : (
               <>
                 {data.temperature && (
@@ -88,10 +76,10 @@ export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
           </View>
         </View>
 
-        {isOffline ? (
+        {!showMetrics ? (
           <View style={styles.offlineContainer}>
             <Text style={[styles.offlineText, { color: colors.textSecondary }]}>
-              最后在线时间：{data.lastSeen || '未知'}
+              {data.message || (data.lastSeen ? `最后在线时间：${data.lastSeen}` : '监控数据暂不可用')}
             </Text>
           </View>
         ) : (

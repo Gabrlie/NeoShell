@@ -3,3 +3,4 @@
  */
 
 export { useTheme } from './useTheme';
+export { useServerMonitoring } from './useServerMonitoring';

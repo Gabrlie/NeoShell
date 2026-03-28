@@ -1,0 +1,50 @@
+diff --git a/node_modules/@dylankenneally/react-native-ssh-sftp/android/build.gradle b/node_modules/@dylankenneally/react-native-ssh-sftp/android/build.gradle
+index c1b0818..3a112ed 100644
+--- a/node_modules/@dylankenneally/react-native-ssh-sftp/android/build.gradle
++++ b/node_modules/@dylankenneally/react-native-ssh-sftp/android/build.gradle
+@@ -1,35 +1,29 @@
++apply plugin: 'com.android.library'
+ 
+-buildscript {
+-    repositories {
+-        jcenter()
+-        google()
+-    }
+-
+-    dependencies {
+-        classpath 'com.android.tools.build:gradle:3.2.1'
+-    }
++def safeExtGet(prop, fallback) {
++    return rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+ }
+ 
+-apply plugin: 'com.android.library'
+-
+ android {
+-    compileSdkVersion 34
+-    buildToolsVersion "34.0.0"
++    namespace "me.dylankenneally.rnssh"
++    compileSdkVersion safeExtGet("compileSdkVersion", 36)
++    buildToolsVersion safeExtGet("buildToolsVersion", "36.0.0")
+ 
+     defaultConfig {
+-        minSdkVersion 21
+-        targetSdkVersion 34
++        minSdkVersion safeExtGet("minSdkVersion", 24)
++        targetSdkVersion safeExtGet("targetSdkVersion", 36)
+         versionCode 1
+         versionName "1.0"
+     }
++
+     lintOptions {
+         abortOnError false
+     }
+ }
+ 
+ repositories {
++    google()
+     mavenCentral()
+-    jcenter()
+ }
+ 
+ dependencies {

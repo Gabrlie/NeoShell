@@ -3,19 +3,29 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
+    "postinstall": "patch-package",
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start:dev-client": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "build:android:development": "npx eas-cli build --platform android --profile development",
+    "build:android:preview": "npx eas-cli build --platform android --profile preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@dylankenneally/react-native-ssh-sftp": "^1.7.0",
+    "@react-native-async-storage/async-storage": "^3.0.2",
     "@react-navigation/native": "^7.1.33",
     "expo": "55.0.10-canary-20260328-2049187",
     "expo-constants": "55.0.10-canary-20260328-2049187",
+    "expo-dev-client": "55.0.20-canary-20260328-2049187",
     "expo-font": "55.0.5-canary-20260328-2049187",
     "expo-linear-gradient": "55.0.10-canary-20260328-2049187",
     "expo-linking": "55.0.10-canary-20260328-2049187",
     "expo-router": "55.0.9-canary-20260328-2049187",
+    "expo-secure-store": "55.0.10-canary-20260328-2049187",
     "expo-splash-screen": "55.0.14-canary-20260328-2049187",
     "expo-status-bar": "55.0.5-canary-20260328-2049187",
     "expo-symbols": "55.0.6-canary-20260328-2049187",
@@ -35,7 +45,9 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~5.9.2"
+    "patch-package": "^8.0.1",
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.2"
   },
   "private": true
 }

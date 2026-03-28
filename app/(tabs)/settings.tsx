@@ -4,6 +4,7 @@
 
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 import { useTheme } from '@/hooks';
 import { Spacing, Typography, BorderRadius } from '@/theme';
@@ -12,6 +13,7 @@ interface SettingItem {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   description?: string;
+  route?: string;
 }
 
 interface SettingGroup {
@@ -24,6 +26,7 @@ const SETTING_GROUPS: SettingGroup[] = [
     title: '管理',
     items: [
       { icon: 'server-outline', label: '服务器管理', description: '管理已保存的服务器' },
+      { icon: 'key-outline', label: '私钥库', description: '管理可复用的 SSH 私钥', route: '/settings/private-keys' },
     ],
   },
   {
@@ -72,6 +75,11 @@ export default function SettingsScreen() {
                     borderBottomColor: colors.border,
                   },
                 ]}
+                onPress={() => {
+                  if (item.route) {
+                    router.push(item.route as never);
+                  }
+                }}
               >
                 <Ionicons
                   name={item.icon}

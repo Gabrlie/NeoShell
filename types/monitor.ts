@@ -1,3 +1,5 @@
+import type { OSType } from './server';
+
 /**
  * 监控数据类型定义
  */
@@ -114,4 +116,26 @@ export interface ProcessInfo {
   memoryPercent: number;
   memoryUsed: number;
   user: string;
+}
+
+export type ServerVisualStatus = 'online' | 'offline' | 'connecting' | 'error';
+
+export interface ServerCardData {
+  id: string;
+  name: string;
+  os: OSType;
+  status: ServerVisualStatus;
+  temperature: number | null;
+  load: number;
+  cpuUsage: number;
+  memUsage: number;
+  memTotal: number;
+  diskUsage: number;
+  diskTotal: number;
+  netUpload: number;
+  netDownload: number;
+  ioRead: number;
+  ioWrite: number;
+  message?: string;
+  lastSeen?: string;
 }

@@ -1,50 +1,68 @@
 /**
  * 主页（监控页）
- * 服务器卡片列表 + 搜索栏
+ * 服务器卡片列表 + 搜索栏 + 监控轮询
  */
 
-import { StyleSheet, View, Text, ScrollView, RefreshControl, TextInput, TouchableOpacity } from 'react-native';
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import { useTheme } from '@/hooks';
-import { Spacing, Typography, BorderRadius } from '@/theme';
-import { ServerCard, type MockServerData } from '@/components/monitor';
-
-const MOCK_SERVERS: MockServerData[] = [
-  {
-    id: 's1', name: 'my-production-1', os: 'ubuntu', status: 'online', temperature: 38,
-    load: 1.25, cpuUsage: 45, memUsage: 68, memTotal: 16 * 1024 * 1024 * 1024,
-    diskUsage: 82, diskTotal: 256 * 1024 * 1024 * 1024, netUpload: 1.2 * 1024 * 1024,
-    netDownload: 5.8 * 1024 * 1024, ioRead: 2.1 * 1024 * 1024, ioWrite: 0.8 * 1024 * 1024,
-  },
-  {
-    id: 's2', name: 'win-server-dev', os: 'windows', status: 'online', temperature: null,
-    load: 0.3, cpuUsage: 12, memUsage: 40, memTotal: 8 * 1024 * 1024 * 1024,
-    diskUsage: 45, diskTotal: 512 * 1024 * 1024 * 1024, netUpload: 200 * 1024,
-    netDownload: 100 * 1024, ioRead: 0, ioWrite: 50 * 1024,
-  },
-  {
-    id: 's3', name: 'old-backup-server', os: 'centos', status: 'offline', temperature: null,
-    load: 0, cpuUsage: 0, memUsage: 0, memTotal: 0, diskUsage: 0, diskTotal: 0,
-    netUpload: 0, netDownload: 0, ioRead: 0, ioWrite: 0, lastSeen: '2 小时前',
-  }
-];
+import { ServerCard } from '@/components/monitor';
+import { Card } from '@/components/ui';
+import { useServerMonitoring, useTheme } from '@/hooks';
+import { toServerCardData } from '@/services/monitorMappers';
+import { useMonitorStore, useServerStore } from '@/stores';
+import { BorderRadius, Spacing, Typography } from '@/theme';
+import type { ServerConfig } from '@/types';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
-  const [search, setSearch] = useState('');
+  const [refreshToken, setRefreshToken] = useState(0);
+  const servers = useServerStore((state) => state.servers);
+  const isHydrated = useServerStore((state) => state.isHydrated);
+  const isHydrating = useServerStore((state) => state.isHydrating);
+  const hydrateServers = useServerStore((state) => state.hydrateServers);
+  const searchQuery = useServerStore((state) => state.searchQuery);
+  const setSearchQuery = useServerStore((state) => state.setSearchQuery);
+
+  useEffect(() => {
+    if (!isHydrated && !isHydrating) {
+      void hydrateServers();
+    }
+  }, [hydrateServers, isHydrated, isHydrating]);
+
+  const filteredServers = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    if (!keyword) {
+      return servers;
+    }
+
+    return servers.filter((server) =>
+      [server.name, server.host, server.group]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(keyword))
+    );
+  }, [searchQuery, servers]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    setRefreshToken((value) => value + 1);
+    setTimeout(() => setRefreshing(false), 800);
   }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Search Header */}
       <View style={styles.header}>
         <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Ionicons name="search" size={20} color={colors.textTertiary} />
@@ -52,11 +70,14 @@ export default function HomeScreen() {
             style={[styles.searchInput, { color: colors.text }]}
             placeholder="搜索服务器..."
             placeholderTextColor={colors.textTertiary}
-            value={search}
-            onChangeText={setSearch}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
         </View>
-        <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accent }]} onPress={() => router.push('/modal')}>
+        <TouchableOpacity
+          style={[styles.addBtn, { backgroundColor: colors.accent }]}
+          onPress={() => router.push('/modal')}
+        >
           <Ionicons name="add" size={24} color={colors.accentText} />
         </TouchableOpacity>
       </View>
@@ -66,15 +87,78 @@ export default function HomeScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {MOCK_SERVERS.map(server => (
-          <ServerCard
-            key={server.id}
-            data={server}
-            onPress={() => router.push(`/server/${server.id}/monitor`)}
-          />
-        ))}
+        {!isHydrated || isHydrating ? (
+          <View style={styles.centerState}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>正在加载服务器列表...</Text>
+          </View>
+        ) : filteredServers.length === 0 ? (
+          <EmptyState hasKeyword={Boolean(searchQuery.trim())} />
+        ) : (
+          filteredServers.map((server) => (
+            <ServerMonitorListItem key={server.id} server={server} refreshToken={refreshToken} />
+          ))
+        )}
       </ScrollView>
     </View>
+  );
+}
+
+function ServerMonitorListItem({
+  server,
+  refreshToken,
+}: {
+  server: ServerConfig;
+  refreshToken: number;
+}) {
+  const snapshot = useMonitorStore((state) => state.snapshots[server.id]);
+  const systemInfo = useMonitorStore((state) => state.systemInfos[server.id]);
+  const serverState = useServerStore((state) => state.serverStates[server.id]);
+
+  useServerMonitoring(server, { refreshToken });
+
+  const cardData = useMemo(() => (
+    toServerCardData({
+      server,
+      state: serverState,
+      snapshot,
+      systemInfo,
+    })
+  ), [server, serverState, snapshot, systemInfo]);
+
+  return (
+    <ServerCard
+      data={cardData}
+      onPress={() => router.push(`/server/${server.id}/monitor`)}
+    />
+  );
+}
+
+function EmptyState({ hasKeyword }: { hasKeyword: boolean }) {
+  const { colors } = useTheme();
+
+  return (
+    <Card style={styles.emptyCard}>
+      <Ionicons
+        name={hasKeyword ? 'search-outline' : 'server-outline'}
+        size={28}
+        color={colors.textTertiary}
+      />
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+        {hasKeyword ? '没有匹配的服务器' : '还没有服务器'}
+      </Text>
+      <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
+        {hasKeyword ? '换个关键字试试，或者清空搜索条件。' : '先添加一台演示服务器，主页和监控详情页就会开始自动刷新数据。'}
+      </Text>
+      {!hasKeyword ? (
+        <TouchableOpacity
+          style={[styles.emptyAction, { backgroundColor: colors.accent }]}
+          onPress={() => router.push('/modal')}
+        >
+          <Text style={[styles.emptyActionText, { color: colors.accentText }]}>添加服务器</Text>
+        </TouchableOpacity>
+      ) : null}
+    </Card>
   );
 }
 
@@ -112,5 +196,37 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
+    flexGrow: 1,
+  },
+  centerState: {
+    paddingTop: Spacing.xxl * 2,
+    alignItems: 'center',
+  },
+  stateText: {
+    ...Typography.body,
+    marginTop: Spacing.md,
+  },
+  emptyCard: {
+    marginTop: Spacing.xl,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    ...Typography.h3,
+    marginTop: Spacing.md,
+  },
+  emptyDesc: {
+    ...Typography.body,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
+  emptyAction: {
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  emptyActionText: {
+    ...Typography.body,
+    fontWeight: '600',
   },
 });
