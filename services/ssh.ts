@@ -66,7 +66,7 @@ async function resolvePrivateKey(server: ServerConfig, overrides?: SSHCredential
   return secret;
 }
 
-async function createClient(
+export async function createSSHClient(
   server: ServerConfig,
   overrides?: SSHCredentialOverride
 ): Promise<SSHClientInstance> {
@@ -146,7 +146,7 @@ export async function connectToServer(
     return existing;
   }
 
-  const client = await createClient(server, overrides);
+  const client = await createSSHClient(server, overrides);
   if (!overrides) {
     clients.set(server.id, client);
   }
@@ -176,7 +176,7 @@ export async function testSSHConnection(
   server: ServerConfig,
   overrides?: SSHCredentialOverride
 ): Promise<{ success: true; message: string }> {
-  const client = await createClient(server, overrides);
+  const client = await createSSHClient(server, overrides);
 
   try {
     const output = await client.execute('echo neoshell-ssh-ok');

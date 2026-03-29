@@ -1,16 +1,15 @@
 diff --git a/node_modules/@dylankenneally/react-native-ssh-sftp/android/build.gradle b/node_modules/@dylankenneally/react-native-ssh-sftp/android/build.gradle
-index c1b0818..3a112ed 100644
+index 5d0d4fb..3a112ed 100644
 --- a/node_modules/@dylankenneally/react-native-ssh-sftp/android/build.gradle
 +++ b/node_modules/@dylankenneally/react-native-ssh-sftp/android/build.gradle
-@@ -1,35 +1,29 @@
-+apply plugin: 'com.android.library'
- 
+@@ -1,34 +1,29 @@
 -buildscript {
 -    repositories {
 -        jcenter()
 -        google()
 -    }
--
++apply plugin: 'com.android.library'
+ 
 -    dependencies {
 -        classpath 'com.android.tools.build:gradle:3.2.1'
 -    }
@@ -48,3 +47,76 @@ index c1b0818..3a112ed 100644
  }
  
  dependencies {
+diff --git a/node_modules/@dylankenneally/react-native-ssh-sftp/android/src/main/java/me/keeex/rnssh/RNSshClientModule.java b/node_modules/@dylankenneally/react-native-ssh-sftp/android/src/main/java/me/keeex/rnssh/RNSshClientModule.java
+index 89a0053..105748c 100644
+--- a/node_modules/@dylankenneally/react-native-ssh-sftp/android/src/main/java/me/keeex/rnssh/RNSshClientModule.java
++++ b/node_modules/@dylankenneally/react-native-ssh-sftp/android/src/main/java/me/keeex/rnssh/RNSshClientModule.java
+@@ -282,6 +282,7 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
+   public void startShell(final String key, final String ptyType, final Callback callback) {
+     new Thread(new Runnable()  {
+       public void run() {
++        boolean didResolve = false;
+         try {
+           SSHClient client = clientPool.get(key);
+           if (client == null) {
+@@ -299,27 +300,33 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
+           client._dataOutputStream = new DataOutputStream(channel.getOutputStream());
+ 
+           callback.invoke();
++          didResolve = true;
+ 
+-//        int charVal;
+-          String line;
+-          while (client._bufferedReader != null && (line = client._bufferedReader.readLine()) != null) {
++          char[] buffer = new char[1024];
++          int readCount;
++          while (client._bufferedReader != null && (readCount = client._bufferedReader.read(buffer, 0, buffer.length)) != -1) {
+             WritableMap map = Arguments.createMap();
+             map.putString("name", "Shell");
+             map.putString("key", key);
+-            map.putString("value", line + '\n');
+-//          map.putString("value", String.valueOf(charVal));
++            map.putString("value", new String(buffer, 0, readCount));
+             sendEvent(reactContext, "Shell", map);
+           }
+ 
+         } catch (JSchException error) {
+           Log.e(LOGTAG, "Error starting shell: " + error.getMessage());
+-          callback.invoke(error.getMessage());
++          if (!didResolve) {
++            callback.invoke(error.getMessage());
++          }
+         } catch (IOException error) {
+           Log.e(LOGTAG, "Error starting shell: " + error.getMessage());
+-          callback.invoke(error.getMessage());
++          if (!didResolve) {
++            callback.invoke(error.getMessage());
++          }
+         } catch (Exception error) {
+           Log.e(LOGTAG, "Error sarting shell: " + error.getMessage());
+-          callback.invoke(error.getMessage());
++          if (!didResolve) {
++            callback.invoke(error.getMessage());
++          }
+         }
+       }
+     }).start();
+@@ -359,15 +366,18 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
+           }
+           if (client._channel != null) {
+               client._channel.disconnect();
++              client._channel = null;
+           }
+ 
+           if (client._dataOutputStream != null) {
+               client._dataOutputStream.flush();
+               client._dataOutputStream.close();
++              client._dataOutputStream = null;
+           }
+ 
+           if (client._bufferedReader != null) {
+               client._bufferedReader.close();
++              client._bufferedReader = null;
+           }
+         } catch (IOException error) {
+           Log.e(LOGTAG, "Error closing shell:" + error.getMessage());

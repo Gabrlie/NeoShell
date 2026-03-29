@@ -40,3 +40,29 @@ export {
 export {
   createServerWithCredentials,
 } from './serverCreation';
+export {
+  createTerminalSession,
+} from './terminalService';
+export {
+  getTerminalSurfaceResetState,
+  type TerminalSurfaceResetReason,
+  type TerminalSurfaceResetState,
+} from './terminalSurface';
+export {
+  getTerminalContentContainerMode,
+  getTerminalKeyboardOverlapHeight,
+  getTerminalShortcutBarOffset,
+  getTerminalShortcutBarBottomInset,
+  type TerminalContentContainerMode,
+} from './terminalLayout';
+export {
+  TERMINAL_SHORTCUT_ROWS,
+  applyTerminalModifiers,
+  resolveTerminalShortcutInput,
+  type TerminalModifierState,
+  type TerminalShortcutKey,
+} from './terminalInput';
+export {
+  isTerminalWebViewAvailable,
+  resolveTerminalWebViewModule,
+} from './terminalWebViewSupport';

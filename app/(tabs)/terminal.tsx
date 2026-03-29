@@ -1,98 +1,206 @@
-/**
- * 终端页入口 Mock
- */
+import { useEffect, useMemo } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { Card } from '@/components/ui';
 import { useTheme } from '@/hooks';
-import { Typography, Spacing } from '@/theme';
+import { useServerStore } from '@/stores';
+import { BorderRadius, Spacing, Typography } from '@/theme';
 
-const MOCK_TERMINAL_OUTPUT = `
---- 连接到 my-server-1 ---
-[i] 正在建立 SSH 连接...
-[✓] SSH 认证成功
-[i] 正在启动 Shell (pty: xterm)...
-[✓] Shell 会话已建立
-
-Welcome to Ubuntu 22.04.3 LTS (GNU/Linux 5.15.0-91-generic x86_64)
-
- * Documentation:  https://help.ubuntu.com
- * Management:     https://landscape.canonical.com
- * Support:        https://ubuntu.com/advantage
-
-user@my-server-1:~$ ls -la
-total 32
-drwxr-xr-x 5 user user 4096 Mar 28 10:00 .
-drwxr-xr-x 3 user user 4096 Mar 15 08:22 ..
--rw-r--r-- 1 user user  220 Mar 25 09:15 .bash_logout
--rw-r--r-- 1 user user 3771 Mar 25 09:15 .bashrc
--rw-r--r-- 1 user user  807 Mar 25 09:15 .profile
-drwxr-xr-x 2 user user 4096 Mar 20 14:30 documents
-
-user@my-server-1:~$ █
-`;
-
-export default function TerminalScreen() {
+export default function TerminalEntryScreen() {
   const { colors } = useTheme();
-  
-  // 终端强制深色独立背景
-  const termBg = '#000000';
-  const termText = '#00FF00'; // 绿色黑客风格
+  const servers = useServerStore((state) => state.servers);
+  const isHydrated = useServerStore((state) => state.isHydrated);
+  const isHydrating = useServerStore((state) => state.isHydrating);
+  const hydrateServers = useServerStore((state) => state.hydrateServers);
+
+  useEffect(() => {
+    if (!isHydrated && !isHydrating) {
+      void hydrateServers();
+    }
+  }, [hydrateServers, isHydrated, isHydrating]);
+
+  const sshServers = useMemo(
+    () => servers.filter((server) => server.dataSource === 'ssh'),
+    [servers],
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: termBg }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={[styles.termText, { color: termText }]}>
-          {MOCK_TERMINAL_OUTPUT.trim()}
-        </Text>
-      </ScrollView>
-
-      {/* 底部快捷键栏 */}
-      <View style={[styles.quickKeys, { backgroundColor: '#1E1E1E' }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.keysScroll}>
-          {['ESC', 'TAB', 'CTRL', 'ALT', '/', '-', '|', '↑', '↓', '←', '→'].map(key => (
-            <TouchableOpacity key={key} style={[styles.keyBtn, { backgroundColor: '#333333' }]}>
-              <Text style={styles.keyText}>{key}</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        {!isHydrated || isHydrating ? (
+          <View style={styles.centerState}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+              正在加载服务器列表...
+            </Text>
+          </View>
+        ) : sshServers.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Ionicons name="terminal-outline" size={30} color={colors.textTertiary} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>还没有可用的 SSH 服务器</Text>
+            <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
+              终端功能仅支持真实 SSH 服务器，新增服务器后就可以从这里直接进入终端。
+            </Text>
+            <TouchableOpacity
+              style={[styles.emptyAction, { backgroundColor: colors.accent }]}
+              onPress={() => router.push('/modal')}
+            >
+              <Text style={[styles.emptyActionText, { color: colors.accentText }]}>添加服务器</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+          </Card>
+        ) : (
+          sshServers.map((server) => (
+            <TouchableOpacity
+              key={server.id}
+              activeOpacity={0.9}
+              onPress={() =>
+                router.push({ pathname: '/terminal/[id]', params: { id: server.id } })
+              }
+            >
+              <Card style={styles.serverCard}>
+                <View style={styles.serverTop}>
+                  <View style={styles.serverIdentity}>
+                    <View style={[styles.serverIcon, { backgroundColor: colors.accentLight }]}>
+                      <Ionicons name="server-outline" size={18} color={colors.accent} />
+                    </View>
+                    <View style={styles.serverTextWrap}>
+                      <Text style={[styles.serverName, { color: colors.text }]}>{server.name}</Text>
+                      <Text style={[styles.serverMeta, { color: colors.textSecondary }]}>
+                        {server.username}@{server.host}:{server.port}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+                </View>
+                <View style={styles.serverBottom}>
+                  <MetaBadge
+                    icon="key-outline"
+                    label={server.authMethod === 'password' ? '密码认证' : '私钥认证'}
+                  />
+                  <MetaBadge
+                    icon="terminal-outline"
+                    label="xterm 交互式终端"
+                  />
+                </View>
+              </Card>
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+function MetaBadge({ icon, label }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string }) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={[styles.metaBadge, { backgroundColor: colors.backgroundSecondary }]}>
+      <Ionicons name={icon} size={14} color={colors.textSecondary} />
+      <Text style={[styles.metaBadgeText, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollContent: {
-    padding: Spacing.md,
-    paddingBottom: Spacing.xxl * 3, // 为键盘预留
+  container: {
+    flex: 1,
   },
-  termText: {
-    ...Typography.mono,
-    fontSize: 14,
-    lineHeight: 20,
+  list: {
+    flex: 1,
   },
-  quickKeys: {
-    height: 48,
+  listContent: {
+    paddingTop: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    gap: Spacing.md,
+  },
+  centerState: {
+    paddingTop: Spacing.xxl * 2,
+    alignItems: 'center',
+  },
+  stateText: {
+    ...Typography.body,
+    marginTop: Spacing.md,
+  },
+  emptyCard: {
+    marginTop: Spacing.xl,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    ...Typography.h3,
+    marginTop: Spacing.md,
+  },
+  emptyDesc: {
+    ...Typography.body,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
+  emptyAction: {
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  emptyActionText: {
+    ...Typography.body,
+    fontWeight: '600',
+  },
+  serverCard: {
+    gap: Spacing.md,
+  },
+  serverTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    justifyContent: 'space-between',
   },
-  keysScroll: {
-    paddingHorizontal: Spacing.sm,
+  serverIdentity: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  serverIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serverTextWrap: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  serverName: {
+    ...Typography.h3,
+  },
+  serverMeta: {
+    ...Typography.bodySmall,
+    marginTop: 2,
+  },
+  serverBottom: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
   },
-  keyBtn: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    borderRadius: 4,
+  metaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    gap: 6,
   },
-  keyText: {
+  metaBadgeText: {
     ...Typography.caption,
-    color: '#E8ECF4',
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 });

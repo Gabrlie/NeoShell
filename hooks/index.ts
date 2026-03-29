@@ -4,3 +4,4 @@
 
 export { useTheme } from './useTheme';
 export { useServerMonitoring } from './useServerMonitoring';
+export { useTerminalSession } from './useTerminalSession';

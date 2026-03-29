@@ -89,8 +89,16 @@ export default function MonitorDetailScreen() {
           <TouchableOpacity style={styles.headerBtn}>
             <Ionicons name="folder-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn}>
-            <Ionicons name="terminal-outline" size={22} color={colors.accent} />
+          <TouchableOpacity
+            style={styles.headerBtn}
+            disabled={server.dataSource !== 'ssh'}
+            onPress={() => router.push({ pathname: '/terminal/[id]', params: { id: server.id } })}
+          >
+            <Ionicons
+              name="terminal-outline"
+              size={22}
+              color={server.dataSource === 'ssh' ? colors.accent : colors.textTertiary}
+            />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerBtn}>
             <Ionicons name="settings-outline" size={22} color={colors.accent} />
