@@ -11,14 +11,21 @@ interface MemorySectionProps {
   used: number;
   available: number;
   cached: number;
-  historyData: { value: number }[];
+  chart: {
+    unitLabel: string;
+    yAxisTicks: { value: number; label: string }[];
+    series: { key: string; label: string; points: { value: number; label: string }[] }[];
+  };
 }
 
-export function MemorySection({ total, used, available, cached, historyData }: MemorySectionProps) {
+export function MemorySection({ total, used, available, cached, chart }: MemorySectionProps) {
   const { colors } = useTheme();
 
   const usagePercent = total > 0 ? (used / total) * 100 : 0;
   const cachedPercent = total > 0 ? (cached / total) * 100 : 0;
+  const appUsed = Math.max(used - cached, 0);
+  const appUsedPercent = total > 0 ? (appUsed / total) * 100 : 0;
+  const freePercent = total > 0 ? (available / total) * 100 : 0;
   
   return (
     <Accordion title="内存" icon="hardware-chip" iconColor={colors.chartMemory} defaultExpanded>
@@ -65,11 +72,12 @@ export function MemorySection({ total, used, available, cached, historyData }: M
         {/* Distribution Bar */}
         <View style={styles.distBarWrapper}>
           <View style={[styles.distBar, { backgroundColor: colors.backgroundSecondary }]}>
-            <View style={[styles.distFill, { width: `${usagePercent}%`, backgroundColor: colors.chartMemory }]} />
+            <View style={[styles.distFill, { width: `${appUsedPercent}%`, backgroundColor: colors.chartMemory }]} />
             <View style={[styles.distFill, { width: `${cachedPercent}%`, backgroundColor: colors.accent }]} />
+            <View style={[styles.distFill, { width: `${freePercent}%`, backgroundColor: colors.textTertiary }]} />
           </View>
           <View style={styles.distLegend}>
-            <Text style={[styles.distLegendText, { color: colors.chartMemory }]}>USR</Text>
+            <Text style={[styles.distLegendText, { color: colors.chartMemory }]}>APP</Text>
             <Text style={[styles.distLegendText, { color: colors.accent }]}>BUF</Text>
             <Text style={[styles.distLegendText, { color: colors.textTertiary }]}>FRE</Text>
           </View>
@@ -78,12 +86,14 @@ export function MemorySection({ total, used, available, cached, historyData }: M
         {/* History Chart */}
         <View style={styles.chartWrapper}>
           <LineChart
-            data={historyData}
-            color={colors.chartMemory}
-            title="内存使用量趋势"
+            title="内存使用率趋势"
+            series={chart.series.map((item) => ({
+              ...item,
+              color: colors.chartMemory,
+            }))}
+            yAxisTicks={chart.yAxisTicks}
             height={130}
-            suffix="GB"
-            maxValue={Math.ceil(total / 1024 / 1024 / 1024)}
+            unitLabel={chart.unitLabel}
           />
         </View>
 

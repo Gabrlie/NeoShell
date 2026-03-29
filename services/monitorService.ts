@@ -1,5 +1,12 @@
 import { formatUptime, MONITOR_COMMAND, SYSTEM_INFO_COMMAND } from '@/utils';
-import type { MonitorSnapshot, ServerConfig, SystemInfo } from '@/types';
+import type {
+  CpuBreakdownData,
+  DiskPartition,
+  MonitorSnapshot,
+  NetworkData,
+  ServerConfig,
+  SystemInfo,
+} from '@/types';
 
 function getSSHService() {
   return require('./ssh') as {
@@ -19,8 +26,61 @@ interface MockSnapshotOptions {
   timestamp?: number;
 }
 
+interface CpuCounters {
+  user: number;
+  nice: number;
+  system: number;
+  idle: number;
+  ioWait: number;
+  irq: number;
+  softIrq: number;
+  steal: number;
+}
+
+interface ParsedNetworkTotals {
+  interface: string;
+  uploadTotal: number;
+  downloadTotal: number;
+}
+
+interface ParsedDiskIO {
+  readTotal: number;
+  writeTotal: number;
+}
+
+export interface ParsedMonitorOutput {
+  cpuTotal: CpuCounters;
+  cpuCores: CpuCounters[];
+  load: [number, number, number];
+  memory: MonitorSnapshot['memory'];
+  disk: DiskPartition[];
+  diskIO: ParsedDiskIO;
+  network: ParsedNetworkTotals[];
+  temperature: MonitorSnapshot['temperature'];
+  uptimeSeconds: number;
+  timestamp: number;
+}
+
 const DEFAULT_INTERFACE = 'eth0';
 const SECTOR_SIZE = 512;
+const MONITOR_BASELINE_TIMEOUT_MS = 5 * 60 * 1000;
+
+const ZERO_CPU_COUNTERS: CpuCounters = {
+  user: 0,
+  nice: 0,
+  system: 0,
+  idle: 0,
+  ioWait: 0,
+  irq: 0,
+  softIrq: 0,
+  steal: 0,
+};
+
+const previousReadings = new Map<string, ParsedMonitorOutput>();
+
+export function resetMonitorBaseline(serverId: string): void {
+  previousReadings.delete(serverId);
+}
 
 function parseSections(output: string): SectionMap {
   const sections: SectionMap = {};
@@ -65,6 +125,97 @@ function parseMeminfo(lines: string[]): Record<string, number> {
   return values;
 }
 
+function parseCpuCounters(line: string): CpuCounters | null {
+  const tokens = line.trim().split(/\s+/);
+  if (tokens.length < 5 || !tokens[0].startsWith('cpu')) {
+    return null;
+  }
+
+  return {
+    user: Number.parseInt(tokens[1] ?? '0', 10) || 0,
+    nice: Number.parseInt(tokens[2] ?? '0', 10) || 0,
+    system: Number.parseInt(tokens[3] ?? '0', 10) || 0,
+    idle: Number.parseInt(tokens[4] ?? '0', 10) || 0,
+    ioWait: Number.parseInt(tokens[5] ?? '0', 10) || 0,
+    irq: Number.parseInt(tokens[6] ?? '0', 10) || 0,
+    softIrq: Number.parseInt(tokens[7] ?? '0', 10) || 0,
+    steal: Number.parseInt(tokens[8] ?? '0', 10) || 0,
+  };
+}
+
+function subtractCpuCounters(current: CpuCounters, previous: CpuCounters): CpuCounters {
+  return {
+    user: Math.max(current.user - previous.user, 0),
+    nice: Math.max(current.nice - previous.nice, 0),
+    system: Math.max(current.system - previous.system, 0),
+    idle: Math.max(current.idle - previous.idle, 0),
+    ioWait: Math.max(current.ioWait - previous.ioWait, 0),
+    irq: Math.max(current.irq - previous.irq, 0),
+    softIrq: Math.max(current.softIrq - previous.softIrq, 0),
+    steal: Math.max(current.steal - previous.steal, 0),
+  };
+}
+
+function getCpuTotal(counter: CpuCounters): number {
+  return (
+    counter.user +
+    counter.nice +
+    counter.system +
+    counter.idle +
+    counter.ioWait +
+    counter.irq +
+    counter.softIrq +
+    counter.steal
+  );
+}
+
+function getCpuNonIdle(counter: CpuCounters): number {
+  return counter.user + counter.nice + counter.system + counter.irq + counter.softIrq + counter.steal;
+}
+
+function toPercent(value: number, total: number): number {
+  if (total <= 0) {
+    return 0;
+  }
+
+  return (value / total) * 100;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function createCpuBreakdown(counter: CpuCounters): CpuBreakdownData {
+  const total = getCpuTotal(counter);
+  return {
+    user: clamp(toPercent(counter.user, total), 0, 100),
+    nice: clamp(toPercent(counter.nice, total), 0, 100),
+    system: clamp(toPercent(counter.system, total), 0, 100),
+    idle: clamp(toPercent(counter.idle, total), 0, 100),
+    ioWait: clamp(toPercent(counter.ioWait, total), 0, 100),
+    irq: clamp(toPercent(counter.irq, total), 0, 100),
+    softIrq: clamp(toPercent(counter.softIrq, total), 0, 100),
+    steal: clamp(toPercent(counter.steal, total), 0, 100),
+  };
+}
+
+function calculateCpuUsage(current: CpuCounters, previous?: CpuCounters): number {
+  const sample = previous ? subtractCpuCounters(current, previous) : current;
+  const total = getCpuTotal(sample);
+  const nonIdle = getCpuNonIdle(sample);
+
+  return clamp(toPercent(nonIdle, total), 0, 100);
+}
+
+function calculateCpuBreakdown(current: CpuCounters, previous?: CpuCounters): CpuBreakdownData {
+  const sample = previous ? subtractCpuCounters(current, previous) : current;
+  return createCpuBreakdown(sample);
+}
+
+function calculateCoreUsage(current: CpuCounters[], previous?: CpuCounters[]): number[] {
+  return current.map((core, index) => calculateCpuUsage(core, previous?.[index]));
+}
+
 function hashString(input: string): number {
   let hash = 0;
   for (let index = 0; index < input.length; index += 1) {
@@ -74,12 +225,135 @@ function hashString(input: string): number {
   return Math.abs(hash);
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
 function wave(seed: number, timestamp: number, frequency: number, amplitude: number, offset: number): number {
   return offset + Math.sin(timestamp / frequency + seed) * amplitude;
+}
+
+function createApproximateBreakdown(cpuUsage: number): CpuBreakdownData {
+  const busy = clamp(cpuUsage, 0, 100);
+  const idle = clamp(100 - busy, 0, 100);
+  const user = busy * 0.52;
+  const nice = busy * 0.03;
+  const system = busy * 0.23;
+  const ioWait = busy * 0.12;
+  const irq = busy * 0.03;
+  const softIrq = busy * 0.05;
+  const steal = busy * 0.02;
+
+  return {
+    user,
+    nice,
+    system,
+    idle,
+    ioWait,
+    irq,
+    softIrq,
+    steal,
+  };
+}
+
+function parseDiskLines(lines: string[]): DiskPartition[] {
+  const ignoredFilesystems = new Set([
+    'overlay',
+    'tmpfs',
+    'devtmpfs',
+    'squashfs',
+    'efivarfs',
+    'proc',
+    'sysfs',
+    'cgroup2',
+    'mqueue',
+    'tracefs',
+    'fusectl',
+  ]);
+
+  return lines
+    .filter((line) => !line.startsWith('Filesystem'))
+    .map((line) => line.trim().split(/\s+/))
+    .filter((tokens) => tokens.length >= 7)
+    .map((tokens) => ({
+      device: tokens[0] ?? undefined,
+      filesystem: tokens[1] ?? 'unknown',
+      total: parseNumber(tokens[2]),
+      used: parseNumber(tokens[3]),
+      usage: parseNumber((tokens[5] ?? '0').replace('%', '')),
+      mountPoint: tokens.slice(6).join(' ') || '/',
+    }))
+    .filter((disk) => disk.total > 0 && !ignoredFilesystems.has(disk.filesystem.toLowerCase()));
+}
+
+function parseDiskIOTotals(lines: string[]): ParsedDiskIO {
+  let readSectors = 0;
+  let writeSectors = 0;
+  const physicalDevicePattern = /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|hd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/;
+
+  for (const line of lines) {
+    const tokens = line.trim().split(/\s+/);
+    if (tokens.length < 10) continue;
+    const name = tokens[2];
+    if (!physicalDevicePattern.test(name)) continue;
+    readSectors += Number.parseInt(tokens[5], 10) || 0;
+    writeSectors += Number.parseInt(tokens[9], 10) || 0;
+  }
+
+  return {
+    readTotal: readSectors * SECTOR_SIZE,
+    writeTotal: writeSectors * SECTOR_SIZE,
+  };
+}
+
+function parseNetworkTotals(lines: string[]): ParsedNetworkTotals[] {
+  return lines
+    .filter((line) => line.includes(':'))
+    .map((line) => {
+      const [ifacePart, rawStats] = line.split(':');
+      const iface = ifacePart.trim();
+      const values = rawStats.trim().split(/\s+/);
+
+      return {
+        interface: iface,
+        uploadTotal: parseNumber(values[8]),
+        downloadTotal: parseNumber(values[0]),
+      };
+    })
+    .filter((item) => item.interface !== 'lo');
+}
+
+function calculateRate(currentTotal: number, previousTotal: number, deltaSeconds: number): number {
+  if (deltaSeconds <= 0 || currentTotal < previousTotal) {
+    return 0;
+  }
+
+  return (currentTotal - previousTotal) / deltaSeconds;
+}
+
+function buildNetworkSnapshot(
+  current: ParsedNetworkTotals[],
+  previous: ParsedNetworkTotals[] | undefined,
+  deltaSeconds: number,
+): NetworkData[] {
+  const previousMap = new Map(previous?.map((item) => [item.interface, item]) ?? []);
+
+  return current.map((item) => {
+    const previousItem = previousMap.get(item.interface);
+
+    return {
+      interface: item.interface,
+      uploadSpeed: previousItem ? calculateRate(item.uploadTotal, previousItem.uploadTotal, deltaSeconds) : 0,
+      downloadSpeed: previousItem ? calculateRate(item.downloadTotal, previousItem.downloadTotal, deltaSeconds) : 0,
+      uploadTotal: item.uploadTotal,
+      downloadTotal: item.downloadTotal,
+    };
+  });
+}
+
+function isComparableReading(previous: ParsedMonitorOutput | undefined, current: ParsedMonitorOutput): boolean {
+  if (!previous) {
+    return false;
+  }
+
+  const deltaMs = current.timestamp - previous.timestamp;
+  return deltaMs > 0 && deltaMs <= MONITOR_BASELINE_TIMEOUT_MS;
 }
 
 export function parseSystemInfoOutput(output: string): SystemInfo {
@@ -99,13 +373,14 @@ export function parseSystemInfoOutput(output: string): SystemInfo {
   };
 }
 
-export function parseMonitorOutput(output: string): MonitorSnapshot {
+export function parseMonitorOutput(output: string, timestamp = Date.now()): ParsedMonitorOutput {
   const sections = parseSections(output);
-  const cpuTokens = sections.CPU?.[0]?.split(/\s+/) ?? [];
-  const cpuStats = cpuTokens.slice(1).map((token) => Number.parseInt(token, 10));
-  const totalCpu = cpuStats.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
-  const idleCpu = cpuStats[3] ?? 0;
-  const cpuUsage = totalCpu > 0 ? ((totalCpu - idleCpu) / totalCpu) * 100 : 0;
+  const cpuLines = sections.CPU ?? [];
+  const cpuTotal = parseCpuCounters(cpuLines[0] ?? '') ?? ZERO_CPU_COUNTERS;
+  const cpuCores = cpuLines
+    .slice(1)
+    .map((line) => parseCpuCounters(line))
+    .filter((line): line is CpuCounters => Boolean(line));
 
   const meminfo = parseMeminfo(sections.MEM ?? []);
   const totalMemory = meminfo.MemTotal ?? 0;
@@ -118,54 +393,21 @@ export function parseMonitorOutput(output: string): MonitorSnapshot {
     .slice(0, 3)
     .map((token) => parseNumber(token));
 
-  const diskTokens = sections.DISK?.[0]?.split(/\s+/) ?? [];
-  const filesystem = diskTokens[1] ?? 'unknown';
-  const totalDisk = parseNumber(diskTokens[2]);
-  const usedDisk = parseNumber(diskTokens[3]);
-  const diskUsage = parseNumber((diskTokens[5] ?? '0').replace('%', ''));
-  const mountPoint = diskTokens[6] && diskTokens[6] !== '-' ? diskTokens[6] : '/';
-
-  const diskLines = sections.DISKIO ?? [];
-  let readSectors = 0;
-  let writeSectors = 0;
-  for (const line of diskLines) {
-    const tokens = line.trim().split(/\s+/);
-    if (tokens.length < 10) continue;
-    const name = tokens[2];
-    if (!/^(sd|vd|xvd|hd|nvme)\w+/.test(name)) continue;
-    readSectors += Number.parseInt(tokens[5], 10) || 0;
-    writeSectors += Number.parseInt(tokens[9], 10) || 0;
-  }
-
-  const network = (sections.NET ?? [])
-    .filter((line) => line.includes(':'))
-    .map((line) => {
-      const [ifacePart, rawStats] = line.split(':');
-      const iface = ifacePart.trim();
-      const values = rawStats.trim().split(/\s+/);
-      return {
-        interface: iface,
-        uploadSpeed: 0,
-        downloadSpeed: 0,
-        uploadTotal: parseNumber(values[8]),
-        downloadTotal: parseNumber(values[0]),
-      };
-    })
-    .filter((item) => item.interface !== 'lo');
-
+  const disks = parseDiskLines(sections.DISK ?? []);
+  const diskIO = parseDiskIOTotals(sections.DISKIO ?? []);
+  const network = parseNetworkTotals(sections.NET ?? []);
   const temperatureRaw = sections.TEMP?.find((line) => /\d/.test(line)) ?? '0';
   const temperatureValue = parseNumber(temperatureRaw);
+  const uptimeSeconds = parseNumber((sections.UPTIME?.[0] ?? '0').split(/\s+/)[0]);
 
   return {
-    cpu: {
-      usage: clamp(cpuUsage, 0, 100),
-      coreUsage: [],
-      load: [
-        loadValues[0] ?? 0,
-        loadValues[1] ?? 0,
-        loadValues[2] ?? 0,
-      ],
-    },
+    cpuTotal,
+    cpuCores,
+    load: [
+      loadValues[0] ?? 0,
+      loadValues[1] ?? 0,
+      loadValues[2] ?? 0,
+    ],
     memory: {
       total: totalMemory,
       used: usedMemory,
@@ -174,26 +416,50 @@ export function parseMonitorOutput(output: string): MonitorSnapshot {
       swapUsed: 0,
       swapTotal: 0,
     },
-    disk: [
-      {
-        mountPoint,
-        filesystem,
-        total: totalDisk,
-        used: usedDisk,
-        usage: diskUsage,
-      },
-    ],
-    diskIO: {
-      readSpeed: 0,
-      writeSpeed: 0,
-      readTotal: readSectors * SECTOR_SIZE,
-      writeTotal: writeSectors * SECTOR_SIZE,
-    },
+    disk: disks,
+    diskIO,
     network,
     temperature: {
       value: temperatureValue > 1000 ? temperatureValue / 1000 : temperatureValue || null,
     },
-    timestamp: Date.now(),
+    uptimeSeconds,
+    timestamp,
+  };
+}
+
+export function createMonitorSnapshot(
+  current: ParsedMonitorOutput,
+  previous?: ParsedMonitorOutput,
+): MonitorSnapshot {
+  const comparable = isComparableReading(previous, current);
+  const previousReading = comparable ? previous : undefined;
+  const deltaSeconds = previousReading
+    ? (current.timestamp - previousReading.timestamp) / 1000
+    : 0;
+
+  return {
+    cpu: {
+      usage: calculateCpuUsage(current.cpuTotal, previousReading?.cpuTotal),
+      coreUsage: calculateCoreUsage(current.cpuCores, previousReading?.cpuCores),
+      load: current.load,
+      breakdown: calculateCpuBreakdown(current.cpuTotal, previousReading?.cpuTotal),
+    },
+    memory: current.memory,
+    disk: current.disk,
+    diskIO: {
+      readSpeed: previousReading
+        ? calculateRate(current.diskIO.readTotal, previousReading.diskIO.readTotal, deltaSeconds)
+        : 0,
+      writeSpeed: previousReading
+        ? calculateRate(current.diskIO.writeTotal, previousReading.diskIO.writeTotal, deltaSeconds)
+        : 0,
+      readTotal: current.diskIO.readTotal,
+      writeTotal: current.diskIO.writeTotal,
+    },
+    network: buildNetworkSnapshot(current.network, previousReading?.network, deltaSeconds),
+    temperature: current.temperature,
+    uptimeSeconds: current.uptimeSeconds,
+    timestamp: current.timestamp,
   };
 }
 
@@ -212,6 +478,7 @@ export function createMockMonitorSnapshot({
   const readSpeed = Math.max(0, wave(seed + 71, timestamp, 20_000, 700_000, 1_000_000));
   const writeSpeed = Math.max(0, wave(seed + 83, timestamp, 18_000, 500_000, 650_000));
   const totalSeconds = Math.floor(timestamp / 1000);
+  const uptimeSeconds = 3 * 86400 + 6 * 3600 + (seed % 7200);
 
   return {
     cpu: {
@@ -224,6 +491,7 @@ export function createMockMonitorSnapshot({
         Number((cpuUsage / 100 * 1.2).toFixed(2)),
         Number((cpuUsage / 100 * 0.9).toFixed(2)),
       ],
+      breakdown: createApproximateBreakdown(cpuUsage),
     },
     memory: {
       total: totalMemory,
@@ -260,11 +528,14 @@ export function createMockMonitorSnapshot({
     temperature: {
       value: Number(clamp(wave(seed + 97, timestamp, 60_000, 7, 48), 32, 74).toFixed(1)),
     },
+    uptimeSeconds,
     timestamp,
   };
 }
 
 export function createMockSystemInfo(server: Pick<ServerConfig, 'name' | 'host'>): SystemInfo {
+  const uptimeSeconds = 3 * 86400 + 6 * 3600 + (hashString(`${server.name}:${server.host}`) % 7200);
+
   return {
     hostname: server.name,
     os: 'Ubuntu 24.04 LTS',
@@ -273,7 +544,7 @@ export function createMockSystemInfo(server: Pick<ServerConfig, 'name' | 'host'>
     cpuModel: 'AMD EPYC Virtual CPU',
     cpuCores: 4,
     totalMemory: 16 * 1024 * 1024 * 1024,
-    uptime: '3 天 6 小时',
+    uptime: formatUptime(uptimeSeconds),
   };
 }
 
@@ -294,7 +565,11 @@ export async function getMonitorSnapshot(server: ServerConfig): Promise<MonitorS
     const sshService = getSSHService();
     if (sshService.isSSHAvailable()) {
       const output = await sshService.executeSSHCommand(server, MONITOR_COMMAND);
-      return parseMonitorOutput(output);
+      const current = parseMonitorOutput(output, Date.now());
+      const previous = previousReadings.get(server.id);
+      const snapshot = createMonitorSnapshot(current, previous);
+      previousReadings.set(server.id, current);
+      return snapshot;
     }
   }
 

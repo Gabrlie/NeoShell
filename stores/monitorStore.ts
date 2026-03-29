@@ -15,6 +15,7 @@ interface MonitorStore {
 
   setSystemInfo: (serverId: string, info: SystemInfo) => void;
   updateSnapshot: (serverId: string, snapshot: MonitorSnapshot) => void;
+  clearServerRuntime: (serverId: string) => void;
   clearServerData: (serverId: string) => void;
 }
 
@@ -39,6 +40,17 @@ export const useMonitorStore = create<MonitorStore>((set) => ({
       return {
         snapshots: { ...state.snapshots, [serverId]: snapshot },
         history: { ...state.history, [serverId]: newHistory },
+      };
+    });
+  },
+
+  clearServerRuntime: (serverId) => {
+    set((state) => {
+      const { [serverId]: _s, ...restSnapshots } = state.snapshots;
+      const { [serverId]: _h, ...restHistory } = state.history;
+      return {
+        snapshots: restSnapshots,
+        history: restHistory,
       };
     });
   },

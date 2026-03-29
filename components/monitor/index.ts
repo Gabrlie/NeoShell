@@ -1,6 +1,7 @@
 export * from './RingChart';
 export * from './LineChart';
 export * from './ServerCard';
+export * from './OSIcon';
 export * from './detail/HeaderOverview';
 export * from './detail/CpuSection';
 export * from './detail/MemorySection';

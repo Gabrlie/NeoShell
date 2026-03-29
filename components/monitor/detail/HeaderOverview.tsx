@@ -2,11 +2,13 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks';
 import { Typography, Spacing } from '@/theme';
+import type { OSVisualMeta } from '@/services/monitorMappers';
+import { OSIcon } from '../OSIcon';
 import { RingChart } from '../RingChart';
 
 interface HeaderOverviewProps {
   osName: string;
-  osIcon: string;
+  osIcon: OSVisualMeta;
   load1: number;
   load5: number;
   load15: number;
@@ -29,7 +31,7 @@ export function HeaderOverview({
     <View style={styles.container}>
       {/* OS Row */}
       <View style={styles.osRow}>
-        <Ionicons name={osIcon as any || 'logo-tux'} size={20} color={colors.accent} />
+        <OSIcon meta={osIcon} size={20} color={colors.accent} />
         <Text style={[styles.osText, { color: colors.text }]}>{osName}</Text>
         <Ionicons name="chevron-down" size={16} color={colors.textTertiary} style={styles.dropdownIcon} />
       </View>

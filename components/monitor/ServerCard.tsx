@@ -5,6 +5,7 @@ import { Typography, Spacing } from '@/theme';
 import { formatSpeed, formatBytes } from '@/utils';
 import type { ServerCardData } from '@/types';
 import { Card } from '../ui';
+import { OSIcon } from './OSIcon';
 import { RingChart } from './RingChart';
 
 interface ServerCardProps {
@@ -12,14 +13,6 @@ interface ServerCardProps {
   onPress?: () => void;
   onLongPress?: () => void;
 }
-
-const OS_ICONS: Record<string, string> = {
-  linux: 'logo-tux',
-  ubuntu: 'logo-ubuntu',
-  windows: 'logo-windows',
-  debian: 'logo-tux',
-  centos: 'logo-tux',
-};
 
 export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
   const { colors } = useTheme();
@@ -42,7 +35,7 @@ export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Ionicons name={OS_ICONS[data.os] as any || 'server'} size={18} color={headerIconColor} />
+            <OSIcon os={data.os} size={18} color={headerIconColor} />
             <Text style={[styles.serverName, { color: colors.text }]} numberOfLines={1}>
               {data.name}
             </Text>
@@ -51,7 +44,7 @@ export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {
           <View style={styles.headerRight}>
             <Ionicons name="power" size={14} color={colors.textSecondary} style={styles.powerIcon} />
             <Text style={[styles.headerRightText, { color: colors.textSecondary }]}>
-              {data.uptime !== '0s' ? data.uptime : '9d'}
+              {data.uptime}
             </Text>
             <Ionicons name="pulse" size={14} color={colors.textSecondary} style={styles.lineChartIcon} />
             <Text style={[styles.headerRightText, { color: colors.textSecondary }]}>

@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import type { ServerConfig, ServerState, ConnectionStatus } from '@/types';
 import { loadServerConfigs, saveServerConfigs } from '@/services/serverStorage';
 import { deleteServerPassword, disconnectServer } from '@/services';
+import { getMonitorFailureState } from '@/services/monitorRuntime';
 import { createServerId } from '@/utils';
 
 interface ServerStore {
@@ -30,6 +31,11 @@ interface ServerStore {
   // 连接状态管理
   setConnectionStatus: (serverId: string, status: ConnectionStatus, error?: string) => void;
   setLastUpdated: (serverId: string) => void;
+  markMonitorSuccess: (serverId: string) => void;
+  markMonitorFailure: (
+    serverId: string,
+    error: string
+  ) => { consecutiveFailures: number; shouldClearRuntime: boolean; status: ConnectionStatus };
 
   // 搜索
   searchQuery: string;
@@ -41,6 +47,7 @@ const buildServerStates = (servers: ServerConfig[], existing: Record<string, Ser
     accumulator[server.id] = existing[server.id] ?? {
       serverId: server.id,
       status: 'disconnected',
+      consecutiveFailures: 0,
     };
     return accumulator;
   }, {});
@@ -82,7 +89,7 @@ export const useServerStore = create<ServerStore>((set, get) => ({
       servers: nextServers,
       serverStates: {
         ...state.serverStates,
-        [id]: { serverId: id, status: 'disconnected' },
+        [id]: { serverId: id, status: 'disconnected', consecutiveFailures: 0 },
       },
     }));
     await saveServerConfigs(nextServers);
@@ -123,6 +130,7 @@ export const useServerStore = create<ServerStore>((set, get) => ({
           ...state.serverStates[serverId],
           serverId,
           status,
+          consecutiveFailures: state.serverStates[serverId]?.consecutiveFailures ?? 0,
           error,
         },
       },
@@ -139,6 +147,42 @@ export const useServerStore = create<ServerStore>((set, get) => ({
         },
       },
     }));
+  },
+
+  markMonitorSuccess: (serverId) => {
+    set((state) => ({
+      serverStates: {
+        ...state.serverStates,
+        [serverId]: {
+          ...state.serverStates[serverId],
+          serverId,
+          status: 'connected',
+          error: undefined,
+          consecutiveFailures: 0,
+          lastUpdated: Date.now(),
+        },
+      },
+    }));
+  },
+
+  markMonitorFailure: (serverId, error) => {
+    const currentState = get().serverStates[serverId];
+    const failureState = getMonitorFailureState(currentState?.consecutiveFailures ?? 0);
+
+    set((state) => ({
+      serverStates: {
+        ...state.serverStates,
+        [serverId]: {
+          ...state.serverStates[serverId],
+          serverId,
+          status: failureState.status,
+          error,
+          consecutiveFailures: failureState.consecutiveFailures,
+        },
+      },
+    }));
+
+    return failureState;
   },
 
   setSearchQuery: (query) => {

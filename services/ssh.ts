@@ -116,7 +116,17 @@ export function normalizeSSHError(error: unknown): string {
     return 'SSH 连接超时，请检查网络、地址和端口。';
   }
 
-  if (normalized.includes('network') || normalized.includes('econnrefused') || normalized.includes('refused')) {
+  if (
+    normalized.includes('unknownhostexception') ||
+    normalized.includes('noroutetohost') ||
+    normalized.includes('socketexception') ||
+    normalized.includes('connectexception') ||
+    normalized.includes('hostunreachable') ||
+    normalized.includes('network') ||
+    normalized.includes('econnrefused') ||
+    normalized.includes('refused') ||
+    normalized.includes('java.net')
+  ) {
     return 'SSH 连接失败，请检查服务器地址、端口和网络连通性。';
   }
 

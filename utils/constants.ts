@@ -8,13 +8,13 @@ export const DEFAULT_SSH_PORT = 22;
 /** 监控数据采集合并命令 */
 export const MONITOR_COMMAND = [
   'echo "===CPU==="',
-  'cat /proc/stat | head -1',
+  'grep "^cpu" /proc/stat',
   'echo "===LOAD==="',
   'cat /proc/loadavg',
   'echo "===MEM==="',
   'cat /proc/meminfo | head -5',
   'echo "===DISK==="',
-  'df -B1 --total | tail -1',
+  'df -B1 -T -x tmpfs -x devtmpfs -x squashfs -x overlay',
   'echo "===DISKIO==="',
   'cat /proc/diskstats',
   'echo "===NET==="',

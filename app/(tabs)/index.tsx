@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 
 import { ServerCard } from '@/components/monitor';
 import { Card } from '@/components/ui';
@@ -27,6 +28,7 @@ import type { ServerConfig } from '@/types';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
+  const isFocused = useIsFocused();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const servers = useServerStore((state) => state.servers);
@@ -96,7 +98,12 @@ export default function HomeScreen() {
           <EmptyState hasKeyword={Boolean(searchQuery.trim())} />
         ) : (
           filteredServers.map((server) => (
-            <ServerMonitorListItem key={server.id} server={server} refreshToken={refreshToken} />
+            <ServerMonitorListItem
+              key={server.id}
+              server={server}
+              refreshToken={refreshToken}
+              enabled={isFocused}
+            />
           ))
         )}
       </ScrollView>
@@ -107,15 +114,22 @@ export default function HomeScreen() {
 function ServerMonitorListItem({
   server,
   refreshToken,
+  enabled,
 }: {
   server: ServerConfig;
   refreshToken: number;
+  enabled: boolean;
 }) {
   const snapshot = useMonitorStore((state) => state.snapshots[server.id]);
   const systemInfo = useMonitorStore((state) => state.systemInfos[server.id]);
   const serverState = useServerStore((state) => state.serverStates[server.id]);
 
-  useServerMonitoring(server, { refreshToken });
+  useServerMonitoring(server, { enabled, refreshToken });
+  const canOpenMonitor = Boolean(
+    snapshot &&
+    systemInfo &&
+    serverState?.status === 'connected'
+  );
 
   const cardData = useMemo(() => (
     toServerCardData({
@@ -129,7 +143,7 @@ function ServerMonitorListItem({
   return (
     <ServerCard
       data={cardData}
-      onPress={() => router.push(`/server/${server.id}/monitor`)}
+      onPress={canOpenMonitor ? () => router.push(`/server/${server.id}/monitor`) : undefined}
     />
   );
 }

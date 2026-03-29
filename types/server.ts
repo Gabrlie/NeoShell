@@ -50,6 +50,8 @@ export interface ServerState {
   status: ConnectionStatus;
   /** 错误信息 */
   error?: string;
+  /** 连续失败次数 */
+  consecutiveFailures: number;
   /** 最后数据更新时间 */
   lastUpdated?: number;
 }

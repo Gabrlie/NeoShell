@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, router, Stack } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -13,19 +14,25 @@ import {
   NetworkSection,
 } from '@/components/monitor';
 import { useServerMonitoring, useTheme } from '@/hooks';
+import { toMonitorDetailData } from '@/services/monitorMappers';
 import { useMonitorStore, useServerStore } from '@/stores';
 import { Spacing, Typography } from '@/theme';
+import type { MonitorSnapshot } from '@/types';
+
+const EMPTY_HISTORY: MonitorSnapshot[] = [];
 
 export default function MonitorDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const isFocused = useIsFocused();
   const servers = useServerStore((state) => state.servers);
   const isHydrated = useServerStore((state) => state.isHydrated);
   const hydrateServers = useServerStore((state) => state.hydrateServers);
+  const serverState = useServerStore((state) => (id ? state.serverStates[id] : undefined));
   const systemInfo = useMonitorStore((state) => (id ? state.systemInfos[id] : undefined));
   const snapshot = useMonitorStore((state) => (id ? state.snapshots[id] : undefined));
-  const history = useMonitorStore((state) => (id ? state.history[id] ?? [] : []));
+  const history = useMonitorStore((state) => (id ? state.history[id] ?? EMPTY_HISTORY : EMPTY_HISTORY));
 
   useEffect(() => {
     if (!isHydrated) {
@@ -34,9 +41,20 @@ export default function MonitorDetailScreen() {
   }, [hydrateServers, isHydrated]);
 
   const server = useMemo(() => servers.find((item) => item.id === id), [id, servers]);
+  const detailData = useMemo(() => {
+    if (!snapshot || !systemInfo) {
+      return undefined;
+    }
+
+    return toMonitorDetailData({
+      snapshot,
+      systemInfo,
+      history,
+    });
+  }, [history, snapshot, systemInfo]);
 
   useServerMonitoring(server, {
-    enabled: Boolean(server),
+    enabled: Boolean(server) && isFocused,
   });
 
   if (!server && isHydrated) {
@@ -48,7 +66,7 @@ export default function MonitorDetailScreen() {
     );
   }
 
-  if (!snapshot || !systemInfo) {
+  if (!server) {
     return (
       <View style={[styles.centerState, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.accent} />
@@ -57,22 +75,8 @@ export default function MonitorDetailScreen() {
     );
   }
 
-  // Parse History Data for Charts
-  const cpuData = history.map((item) => ({ value: Number(item.cpu.usage.toFixed(1)) }));
-  const memData = history.map((item) => ({
-    value: Number((item.memory.used / 1024 / 1024 / 1024).toFixed(2)),
-  }));
-  const netUpData = history.map((item) => ({
-    value: Number((((item.network[0]?.uploadSpeed ?? 0) / 1024 / 1024)).toFixed(2)),
-  }));
-  const netDownData = history.map((item) => ({
-    value: Number((((item.network[0]?.downloadSpeed ?? 0) / 1024 / 1024)).toFixed(2)),
-  }));
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Stack.Screen options={{ headerShown: false }} />
-      
       {/* Custom Header */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
         <View style={styles.headerLeft}>
@@ -94,58 +98,79 @@ export default function MonitorDetailScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
-        
-        {/* Top Overview */}
-        <HeaderOverview
-          osName={`${systemInfo.os} ${systemInfo.arch}`}
-          osIcon="logo-tux"
-          load1={snapshot.cpu.load[0]}
-          load5={snapshot.cpu.load[1]}
-          load15={snapshot.cpu.load[2]}
-          uptime={systemInfo.uptime}
-          cpuUsage={snapshot.cpu.usage}
-        />
-
-        {/* CPU Details */}
-        <CpuSection
-          usage={snapshot.cpu.usage}
-          coreUsage={snapshot.cpu.coreUsage || [snapshot.cpu.usage]} // Fallback if mock is missing
-          historyData={cpuData}
-          cores={systemInfo.cpuCores}
-        />
-
-        {/* Memory Details */}
-        <MemorySection
-          total={snapshot.memory.total}
-          used={snapshot.memory.used}
-          available={snapshot.memory.available}
-          cached={snapshot.memory.cached}
-          historyData={memData}
-        />
-
-        {/* Disk Details */}
-        <DiskSection disks={snapshot.disk} />
-
-        {/* Network Details */}
-        <NetworkSection
-          networks={snapshot.network}
-          upHistory={netUpData}
-          downHistory={netDownData}
-        />
-
-        {/* Tools */}
-        <View style={styles.toolsSection}>
-          <Text style={[styles.toolsTitle, { color: colors.textTertiary }]}>工具</Text>
-          <Card style={[styles.toolsCard, { backgroundColor: colors.cardElevated, borderColor: colors.border }]}>
-            <ToolButton icon="list" text="进程列表" color="#007AFF" />
-            <ToolButton icon="globe-outline" text="IP 地址" color="#34C759" />
-            <ToolButton icon="analytics" text="流量统计" color="#AF52DE" />
-          </Card>
+      {!detailData ? (
+        <View style={[styles.centerState, { backgroundColor: colors.background }]}>
+          {serverState?.status === 'disconnected' || serverState?.status === 'error' ? (
+            <>
+              <Ionicons name="warning-outline" size={28} color={colors.warning} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>服务器已断开</Text>
+              <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
+                {serverState.error ?? '连续多次获取监控数据失败，请检查网络、主机地址和 SSH 配置。'}
+              </Text>
+            </>
+          ) : (
+            <>
+              <ActivityIndicator color={colors.accent} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                {serverState?.status === 'reconnecting' ? '正在重新连接服务器...' : '正在获取监控数据...'}
+              </Text>
+            </>
+          )}
         </View>
+      ) : (
+        <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
+        
+          {/* Top Overview */}
+          <HeaderOverview
+            osName={detailData.header.osName}
+            osIcon={detailData.header.osIcon}
+            load1={detailData.header.load1}
+            load5={detailData.header.load5}
+            load15={detailData.header.load15}
+            uptime={detailData.header.uptime}
+            cpuUsage={detailData.header.cpuUsage}
+          />
 
-        <View style={{ height: Spacing.xxl * 2 }} />
-      </ScrollView>
+          {/* CPU Details */}
+          <CpuSection
+            usage={detailData.cpu.usage}
+            coreUsage={detailData.cpu.coreUsage}
+            chart={detailData.cpu.chart}
+            cores={detailData.cpu.cores}
+            breakdown={detailData.cpu.breakdown}
+          />
+
+          {/* Memory Details */}
+          <MemorySection
+            total={detailData.memory.total}
+            used={detailData.memory.used}
+            available={detailData.memory.available}
+            cached={detailData.memory.cached}
+            chart={detailData.memory.chart}
+          />
+
+          {/* Disk Details */}
+          <DiskSection disks={detailData.disk.disks} />
+
+          {/* Network Details */}
+          <NetworkSection
+            networks={detailData.network.networks}
+            chart={detailData.network.chart}
+          />
+
+          {/* Tools */}
+          <View style={styles.toolsSection}>
+            <Text style={[styles.toolsTitle, { color: colors.textTertiary }]}>工具</Text>
+            <Card style={[styles.toolsCard, { backgroundColor: colors.cardElevated, borderColor: colors.border }]}>
+              <ToolButton icon="list" text="进程列表" color="#007AFF" />
+              <ToolButton icon="globe-outline" text="IP 地址" color="#34C759" />
+              <ToolButton icon="analytics" text="流量统计" color="#AF52DE" />
+            </Card>
+          </View>
+
+          <View style={{ height: Spacing.xxl * 2 }} />
+        </ScrollView>
+      )}
     </View>
   );
 }

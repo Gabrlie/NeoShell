@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/hooks';
-import { Typography, Spacing } from '@/theme';
+import { Spacing } from '@/theme';
+import type { CpuBreakdownData } from '@/types';
 import { Accordion } from '../../ui';
 import { LineChart } from '../LineChart';
 import { RingChart } from '../RingChart';
@@ -8,12 +9,27 @@ import { RingChart } from '../RingChart';
 interface CpuSectionProps {
   usage: number;
   coreUsage: number[];
-  historyData: { value: number }[];
+  chart: {
+    unitLabel: string;
+    yAxisTicks: { value: number; label: string }[];
+    series: { key: string; label: string; points: { value: number; label: string }[] }[];
+  };
   cores: number;
+  breakdown: CpuBreakdownData;
 }
 
-export function CpuSection({ usage, coreUsage, historyData, cores }: CpuSectionProps) {
+export function CpuSection({ usage, coreUsage, chart, cores, breakdown }: CpuSectionProps) {
   const { colors } = useTheme();
+  const breakdownItems = [
+    { color: colors.accent, label: '用户', value: breakdown.user },
+    { color: colors.warning, label: 'Nice', value: breakdown.nice },
+    { color: colors.chartCpu, label: '系统', value: breakdown.system },
+    { color: colors.danger, label: 'I/O 等待', value: breakdown.ioWait },
+    { color: colors.chartMemory, label: 'IRQ', value: breakdown.irq },
+    { color: colors.textTertiary, label: '软中断', value: breakdown.softIrq },
+    { color: colors.textSecondary, label: '窃取', value: breakdown.steal },
+    { color: colors.border, label: '空闲', value: breakdown.idle },
+  ];
 
   return (
     <Accordion title="CPU" icon="pulse" iconColor={colors.chartCpu} defaultExpanded>
@@ -22,15 +38,14 @@ export function CpuSection({ usage, coreUsage, historyData, cores }: CpuSectionP
         {/* Top Overview */}
         <View style={styles.topRow}>
           <View style={styles.legendGrid}>
-            <LegendItem color={colors.chartCpu} label="系统" value={(usage * 0.4).toFixed(1)} />
-            <LegendItem color={colors.accent} label="用户" value={(usage * 0.5).toFixed(1)} />
-            <LegendItem color={colors.warning} label="I/O 等待" value={(usage * 0.05).toFixed(1)} />
-            <LegendItem color={colors.danger} label="Irq" value="0.0" />
-            
-            <LegendItem color={colors.chartMemory} label="软中断" value="0.0" />
-            <LegendItem color={colors.textTertiary} label="拉取断" value="0.0" />
-            <LegendItem color={colors.textSecondary} label="窃取" value="0.0" />
-            <LegendItem color={colors.border} label="Idle" value={(100 - usage).toFixed(1)} />
+            {breakdownItems.map((item) => (
+              <LegendItem
+                key={item.label}
+                color={item.color}
+                label={item.label}
+                value={item.value.toFixed(1)}
+              />
+            ))}
           </View>
           
           <View style={styles.overallRing}>
@@ -42,12 +57,14 @@ export function CpuSection({ usage, coreUsage, historyData, cores }: CpuSectionP
         {/* Chart */}
         <View style={styles.chartWrapper}>
           <LineChart
-            data={historyData}
-            color={colors.chartCpu}
             title="CPU 使用率"
+            series={chart.series.map((item) => ({
+              ...item,
+              color: colors.chartCpu,
+            }))}
+            yAxisTicks={chart.yAxisTicks}
             height={130}
-            suffix="%"
-            maxValue={100}
+            unitLabel={chart.unitLabel}
           />
         </View>
 
@@ -58,13 +75,11 @@ export function CpuSection({ usage, coreUsage, historyData, cores }: CpuSectionP
               <Text style={[styles.coreLabel, { color: colors.textSecondary }]}>CPU {idx}</Text>
               
               <View style={[styles.barBg, { backgroundColor: colors.border }]}>
-                {/* Simulated split for user/sys */}
-                <View style={[styles.barFill, { width: `${coreVal * 0.5}%`, backgroundColor: colors.accent }]} />
-                <View style={[styles.barFill, { width: `${coreVal * 0.4}%`, backgroundColor: colors.chartCpu }]} />
+                <View style={[styles.barFill, { width: `${coreVal}%`, backgroundColor: colors.chartCpu }]} />
               </View>
               
               <Text style={[styles.coreValueText, { color: colors.textTertiary }]}>
-                usr {(coreVal * 0.5).toFixed(1)}% sys {(coreVal * 0.4).toFixed(1)}% ni 0.0% st 0.0%
+                {coreVal.toFixed(1)}%
               </Text>
             </View>
           ))}
@@ -147,22 +162,21 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   coreLabel: {
-    width: 40,
+    width: 44,
     fontSize: 11,
   },
   barBg: {
     flex: 1,
     height: 6,
     borderRadius: 3,
-    flexDirection: 'row',
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
   },
   coreValueText: {
-    fontSize: 9,
-    width: 145,
+    fontSize: 10,
+    width: 52,
     textAlign: 'right',
   },
 });

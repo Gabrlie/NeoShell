@@ -12,12 +12,18 @@ export {
 } from './ssh';
 export {
   createMockMonitorSnapshot,
+  createMonitorSnapshot,
   createMockSystemInfo,
   getMonitorSnapshot,
   getSystemInfo,
   parseMonitorOutput,
   parseSystemInfoOutput,
+  resetMonitorBaseline,
 } from './monitorService';
+export {
+  MAX_MONITOR_FAILURES,
+  getMonitorFailureState,
+} from './monitorRuntime';
 export {
   createPrivateKeyEntry,
   createPrivateKeySummary,

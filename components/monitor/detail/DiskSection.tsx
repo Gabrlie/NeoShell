@@ -40,7 +40,7 @@ export function DiskSection({ disks }: DiskSectionProps) {
                 </View>
                 
                 <ProgressBar
-                  progress={disk.usage / 100}
+                  progress={disk.usage}
                   color={progressColor}
                   trackColor={colors.backgroundSecondary}
                   height={4}

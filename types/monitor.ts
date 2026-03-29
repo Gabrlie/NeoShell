@@ -17,6 +17,25 @@ export interface SystemInfo {
 }
 
 /** CPU 实时数据 */
+export interface CpuBreakdownData {
+  /** 用户态 */
+  user: number;
+  /** nice */
+  nice: number;
+  /** 内核态 */
+  system: number;
+  /** 空闲 */
+  idle: number;
+  /** I/O 等待 */
+  ioWait: number;
+  /** 硬中断 */
+  irq: number;
+  /** 软中断 */
+  softIrq: number;
+  /** 虚拟机 steal */
+  steal: number;
+}
+
 export interface CpuData {
   /** 总体使用率 (0-100) */
   usage: number;
@@ -24,6 +43,8 @@ export interface CpuData {
   coreUsage: number[];
   /** 1/5/15 分钟负载 */
   load: [number, number, number];
+  /** CPU 各状态占比 */
+  breakdown: CpuBreakdownData;
 }
 
 /** 内存实时数据 */
@@ -44,6 +65,8 @@ export interface MemoryData {
 
 /** 磁盘分区信息 */
 export interface DiskPartition {
+  /** 设备或卷标识 */
+  device?: string;
   /** 挂载点 */
   mountPoint: string;
   /** 文件系统类型 */
@@ -96,6 +119,8 @@ export interface MonitorSnapshot {
   diskIO: DiskIOData;
   network: NetworkData[];
   temperature: TemperatureData;
+  /** 开机时长（秒） */
+  uptimeSeconds: number;
   /** 采样时间戳 */
   timestamp: number;
 }

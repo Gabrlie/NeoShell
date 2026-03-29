@@ -54,8 +54,7 @@ function RootLayoutNav() {
         <Stack.Screen
           name="server/[id]/monitor"
           options={{
-            title: '监控详情',
-            headerBackTitle: '返回',
+            headerShown: false,
           }}
         />
         <Stack.Screen

@@ -1,13 +1,17 @@
 import { useEffect } from 'react';
 
-import { getMonitorSnapshot, getSystemInfo } from '@/services';
+import { disconnectServer, getMonitorSnapshot, getSystemInfo, resetMonitorBaseline } from '@/services';
 import { useMonitorStore, useServerStore, useSettingsStore } from '@/stores';
-import type { ServerConfig } from '@/types';
+import type { ConnectionStatus, ServerConfig } from '@/types';
 
 interface UseServerMonitoringOptions {
   enabled?: boolean;
   once?: boolean;
   refreshToken?: number;
+}
+
+function getPendingStatus(hasSystemInfo: boolean, hasSnapshot: boolean): ConnectionStatus {
+  return hasSystemInfo || hasSnapshot ? 'reconnecting' : 'connecting';
 }
 
 export function useServerMonitoring(
@@ -21,10 +25,10 @@ export function useServerMonitoring(
   const refreshInterval = useSettingsStore((state) => state.refreshInterval);
   const setSystemInfo = useMonitorStore((state) => state.setSystemInfo);
   const updateSnapshot = useMonitorStore((state) => state.updateSnapshot);
-  const hasSystemInfo = useMonitorStore((state) => Boolean(server ? state.systemInfos[server.id] : undefined));
-  const hasSnapshot = useMonitorStore((state) => Boolean(server ? state.snapshots[server.id] : undefined));
+  const clearServerRuntime = useMonitorStore((state) => state.clearServerRuntime);
   const setConnectionStatus = useServerStore((state) => state.setConnectionStatus);
-  const setLastUpdated = useServerStore((state) => state.setLastUpdated);
+  const markMonitorSuccess = useServerStore((state) => state.markMonitorSuccess);
+  const markMonitorFailure = useServerStore((state) => state.markMonitorFailure);
 
   useEffect(() => {
     if (!server || !enabled) {
@@ -32,12 +36,41 @@ export function useServerMonitoring(
     }
 
     let cancelled = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let polling = false;
+    let stopPolling = false;
+
+    const scheduleNext = () => {
+      if (once || cancelled || stopPolling) {
+        return;
+      }
+
+      timer = setTimeout(() => {
+        void poll();
+      }, refreshInterval * 1000);
+    };
 
     const poll = async () => {
-      setConnectionStatus(server.id, hasSnapshot ? 'connected' : hasSystemInfo ? 'reconnecting' : 'connecting');
+      if (cancelled || polling) {
+        return;
+      }
+
+      polling = true;
 
       try {
+        const monitorState = useMonitorStore.getState();
+        const hasSystemInfo = Boolean(monitorState.systemInfos[server.id]);
+        const hasSnapshot = Boolean(monitorState.snapshots[server.id]);
+        const serverState = useServerStore.getState().serverStates[server.id];
+        const shouldKeepConnected = serverState?.status === 'connected' && hasSnapshot;
+        const pendingStatus = shouldKeepConnected
+          ? undefined
+          : getPendingStatus(hasSystemInfo, hasSnapshot);
+
+        if (pendingStatus && serverState?.status !== pendingStatus) {
+          setConnectionStatus(server.id, pendingStatus, serverState?.error);
+        }
+
         if (!hasSystemInfo) {
           const systemInfo = await getSystemInfo(server);
           if (cancelled) return;
@@ -47,39 +80,42 @@ export function useServerMonitoring(
         const snapshot = await getMonitorSnapshot(server);
         if (cancelled) return;
         updateSnapshot(server.id, snapshot);
-        setConnectionStatus(server.id, 'connected');
-        setLastUpdated(server.id);
+        markMonitorSuccess(server.id);
       } catch (error) {
         if (cancelled) return;
         const message = error instanceof Error ? error.message : '未知错误';
-        setConnectionStatus(server.id, 'error', message);
+        const failureState = markMonitorFailure(server.id, message);
+
+        if (failureState.shouldClearRuntime) {
+          stopPolling = true;
+          clearServerRuntime(server.id);
+          resetMonitorBaseline(server.id);
+          await disconnectServer(server.id).catch(() => undefined);
+        }
+      } finally {
+        polling = false;
+        scheduleNext();
       }
     };
 
     void poll();
 
-    if (!once) {
-      timer = setInterval(() => {
-        void poll();
-      }, refreshInterval * 1000);
-    }
-
     return () => {
       cancelled = true;
       if (timer) {
-        clearInterval(timer);
+        clearTimeout(timer);
       }
     };
   }, [
+    clearServerRuntime,
     enabled,
-    hasSystemInfo,
-    hasSnapshot,
+    markMonitorFailure,
+    markMonitorSuccess,
     once,
     refreshInterval,
     refreshToken,
     server,
     setConnectionStatus,
-    setLastUpdated,
     setSystemInfo,
     updateSnapshot,
   ]);

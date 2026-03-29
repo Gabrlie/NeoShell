@@ -8,12 +8,20 @@ import { LineChart } from '../LineChart';
 
 interface NetworkSectionProps {
   networks: NetworkData[];
-  upHistory: { value: number }[];
-  downHistory: { value: number }[];
+  chart: {
+    unitLabel: string;
+    yAxisTicks: { value: number; label: string }[];
+    series: { key: string; label: string; points: { value: number; label: string }[] }[];
+    summary?: { key: string; label: string; value: string }[];
+  };
 }
 
-export function NetworkSection({ networks, upHistory, downHistory }: NetworkSectionProps) {
+export function NetworkSection({ networks, chart }: NetworkSectionProps) {
   const { colors } = useTheme();
+  const chartColors: Record<string, string> = {
+    upload: colors.chartUpload,
+    download: colors.chartDownload,
+  };
 
   return (
     <Accordion title="网卡" icon="swap-vertical" iconColor={colors.chartUpload} defaultExpanded>
@@ -21,22 +29,21 @@ export function NetworkSection({ networks, upHistory, downHistory }: NetworkSect
         
         {/* Trend Area */}
         <View style={[styles.trendWrapper, { backgroundColor: colors.cardElevated, borderColor: colors.border }]}>
-          <Text style={[styles.trendTitle, { color: colors.textSecondary }]}>速率趋势</Text>
+          <Text style={[styles.trendTitle, { color: colors.textSecondary }]}>实时速率趋势</Text>
           <View style={styles.chartCol}>
             <LineChart
-              data={upHistory}
-              color={colors.chartUpload}
-              title="上传趋势"
-              height={110}
-            />
-          </View>
-          <View style={styles.chartGap} />
-          <View style={styles.chartCol}>
-            <LineChart
-              data={downHistory}
-              color={colors.chartDownload}
-              title="下载趋势"
-              height={110}
+              title="上传 / 下载"
+              series={chart.series.map((item) => ({
+                ...item,
+                color: chartColors[item.key] ?? colors.accent,
+              }))}
+              yAxisTicks={chart.yAxisTicks}
+              unitLabel={chart.unitLabel}
+              summary={chart.summary?.map((item) => ({
+                ...item,
+                color: chartColors[item.key] ?? colors.accent,
+              }))}
+              height={120}
             />
           </View>
         </View>
@@ -94,9 +101,6 @@ const styles = StyleSheet.create({
   },
   chartCol: {
     width: '100%',
-  },
-  chartGap: {
-    height: Spacing.md,
   },
   ifaceGrid: {
     flexDirection: 'row',
