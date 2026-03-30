@@ -76,6 +76,18 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="files/editor/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="files/view/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
           name="modal"
           options={{ presentation: 'modal', title: '新增服务器' }}
         />

@@ -19,6 +19,7 @@ import {
 } from '@/services/transferTasks';
 import {
   openTransferResult,
+  prepareBundledDownloadTransfer,
   prepareDownloadTransfer,
   prepareUploadTransfer,
   shareTransferResult,
@@ -42,6 +43,11 @@ interface TransferStoreState {
 interface TransferStoreActions {
   startUpload: (server: ServerConfig, remoteDirectoryPath: string) => Promise<void>;
   startDownload: (server: ServerConfig, entry: FileEntry) => Promise<void>;
+  startSelectionDownload: (
+    server: ServerConfig,
+    currentDirectoryPath: string,
+    entries: FileEntry[],
+  ) => Promise<void>;
   pauseTask: (server: ServerConfig, taskId: string) => Promise<void>;
   resumeTask: (server: ServerConfig, taskId: string) => Promise<void>;
   cancelTask: (server: ServerConfig, taskId: string) => Promise<void>;
@@ -239,6 +245,52 @@ export const useTransferStore = create<TransferStore>((set, get) => ({
       direction: 'download',
       fileName: prepared.fileName,
       remotePath: prepared.remotePath,
+      localUri: prepared.localUri,
+      localPath: prepared.localPath,
+      tempLocalUri: prepared.tempLocalUri,
+      tempLocalPath: prepared.tempLocalPath,
+      totalBytes: prepared.totalBytes,
+      createdAt: Date.now(),
+    });
+
+    set((state) => ({
+      tasks: [...state.tasks, task],
+      startToasts: {
+        ...state.startToasts,
+        [server.id]: createTransferStartToast(task),
+      },
+    }));
+
+    if (!getRunningTask(get().tasks, server.id)) {
+      void runTask(server, task);
+    }
+  },
+
+  startSelectionDownload: async (server, currentDirectoryPath, entries) => {
+    if (entries.length === 0) {
+      throw new Error('请至少选择一个文件或文件夹。');
+    }
+
+    if (entries.length === 1 && !entries[0]!.isDirectory) {
+      await get().startDownload(server, entries[0]!);
+      return;
+    }
+
+    const taskId = createTransferId();
+    const prepared = await prepareBundledDownloadTransfer(
+      server,
+      currentDirectoryPath,
+      entries,
+      taskId,
+    );
+
+    const task = createTransferTask({
+      id: taskId,
+      serverId: server.id,
+      direction: 'download',
+      fileName: prepared.fileName,
+      remotePath: prepared.remotePath,
+      cleanupRemotePath: prepared.cleanupRemotePath,
       localUri: prepared.localUri,
       localPath: prepared.localPath,
       tempLocalUri: prepared.tempLocalUri,

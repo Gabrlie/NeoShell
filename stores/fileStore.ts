@@ -7,10 +7,12 @@ import {
   normalizeRemotePath,
 } from '@/services/fileService';
 import {
+  compressRemoteEntries,
   copyRemoteEntries,
   createRemoteDirectory,
   createRemoteFile,
   deleteRemoteEntries,
+  extractRemoteArchive,
   moveRemoteEntries,
   renameRemoteEntry,
 } from '@/services/fileActions';
@@ -34,6 +36,8 @@ interface FileStore {
   createDirectory: (server: ServerConfig, directoryName: string) => Promise<void>;
   renameEntry: (server: ServerConfig, entryPath: string, nextName: string) => Promise<void>;
   deleteEntries: (server: ServerConfig, entryPaths: string[]) => Promise<void>;
+  compressEntries: (server: ServerConfig, entryPaths: string[]) => Promise<void>;
+  extractArchive: (server: ServerConfig, entryPath: string) => Promise<void>;
   stageCopyEntries: (serverId: string, entryPaths: string[]) => void;
   stageMoveEntries: (serverId: string, entryPaths: string[]) => void;
   clearPendingOperation: (serverId: string) => void;
@@ -281,6 +285,86 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
     try {
       await deleteRemoteEntries(server, targetEntries);
+      await get().loadDirectory(server, currentBrowser.currentPath);
+    } catch (error) {
+      const message = toErrorMessage(error);
+      set((state) => ({
+        browsers: {
+          ...state.browsers,
+          [server.id]: {
+            ...(state.browsers[server.id] ?? currentBrowser),
+            isMutating: false,
+            mutationError: message,
+          },
+        },
+      }));
+      throw error;
+    }
+  },
+
+  compressEntries: async (server, entryPaths) => {
+    if (entryPaths.length === 0) {
+      return;
+    }
+
+    const currentBrowser = get().browsers[server.id] ?? createInitialBrowserState();
+    const targetEntries = currentBrowser.entries.filter((entry) => entryPaths.includes(entry.path));
+
+    if (targetEntries.length !== entryPaths.length) {
+      throw new Error('有部分文件项已不存在，请刷新目录后重试。');
+    }
+
+    set((state) => ({
+      browsers: {
+        ...state.browsers,
+        [server.id]: {
+          ...currentBrowser,
+          isMutating: true,
+          mutationError: undefined,
+        },
+      },
+    }));
+
+    try {
+      await compressRemoteEntries(server, currentBrowser.currentPath, targetEntries);
+      await get().loadDirectory(server, currentBrowser.currentPath);
+    } catch (error) {
+      const message = toErrorMessage(error);
+      set((state) => ({
+        browsers: {
+          ...state.browsers,
+          [server.id]: {
+            ...(state.browsers[server.id] ?? currentBrowser),
+            isMutating: false,
+            mutationError: message,
+          },
+        },
+      }));
+      throw error;
+    }
+  },
+
+  extractArchive: async (server, entryPath) => {
+    const currentBrowser = get().browsers[server.id] ?? createInitialBrowserState();
+    const targetEntry = currentBrowser.entries.find((entry) => entry.path === entryPath);
+
+    if (!targetEntry) {
+      throw new Error('未找到要解压的文件项。');
+    }
+
+    set((state) => ({
+      browsers: {
+        ...state.browsers,
+        [server.id]: {
+          ...currentBrowser,
+          isMutating: true,
+          mutationError: undefined,
+        },
+      },
+    }));
+
+    try {
+      await extractRemoteArchive(server, targetEntry.path, currentBrowser.currentPath);
       await get().loadDirectory(server, currentBrowser.currentPath);
     } catch (error) {
       const message = toErrorMessage(error);

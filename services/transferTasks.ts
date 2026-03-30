@@ -10,6 +10,7 @@ export interface CreateTransferTaskInput {
   direction: FileTransferDirection;
   fileName: string;
   remotePath: string;
+  cleanupRemotePath?: string;
   localPath?: string;
   localUri?: string;
   shareUri?: string;
@@ -57,6 +58,7 @@ export function createTransferTask(input: CreateTransferTaskInput): FileTransfer
     direction: input.direction,
     fileName: input.fileName,
     remotePath: input.remotePath,
+    cleanupRemotePath: input.cleanupRemotePath,
     localPath: input.localPath,
     localUri: input.localUri,
     shareUri: input.shareUri,

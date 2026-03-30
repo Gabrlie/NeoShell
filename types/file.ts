@@ -46,6 +46,7 @@ export interface FileTransferTask {
   direction: FileTransferDirection;
   fileName: string;
   remotePath: string;
+  cleanupRemotePath?: string;
   localPath?: string;
   localUri?: string;
   shareUri?: string;

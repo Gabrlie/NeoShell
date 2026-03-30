@@ -21,8 +21,12 @@ import { FilePendingOperationBar } from '@/components/files/FilePendingOperation
 import { FileTransferToast } from '@/components/files/FileTransferToast';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/hooks/useTheme';
+import { isSupportedTarArchiveName } from '@/services/fileActions';
 import { shouldInterceptFileBrowserBack } from '@/services/fileNavigation';
 import { getFilePendingOperationBlockedReason } from '@/services/filePendingOperation';
+import {
+  shouldOpenFileInViewer,
+} from '@/services/filePreviewService';
 import { createParentDirectoryEntry } from '@/services/fileService';
 import { useFileStore } from '@/stores/fileStore';
 import { useServerStore } from '@/stores/serverStore';
@@ -84,12 +88,15 @@ export default function FileBrowserScreen() {
   const createDirectory = useFileStore((state) => state.createDirectory);
   const renameEntry = useFileStore((state) => state.renameEntry);
   const deleteEntries = useFileStore((state) => state.deleteEntries);
+  const compressEntries = useFileStore((state) => state.compressEntries);
+  const extractArchive = useFileStore((state) => state.extractArchive);
   const stageCopyEntries = useFileStore((state) => state.stageCopyEntries);
   const stageMoveEntries = useFileStore((state) => state.stageMoveEntries);
   const clearPendingOperation = useFileStore((state) => state.clearPendingOperation);
   const executePendingOperation = useFileStore((state) => state.executePendingOperation);
   const startUpload = useTransferStore((state) => state.startUpload);
   const startDownload = useTransferStore((state) => state.startDownload);
+  const startSelectionDownload = useTransferStore((state) => state.startSelectionDownload);
   const startToast = useTransferStore((state) => (id ? state.startToasts[id] : undefined));
   const dismissStartToast = useTransferStore((state) => state.dismissStartToast);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -246,6 +253,25 @@ export default function FileBrowserScreen() {
     );
   };
 
+  const openFileEntry = (entry: Pick<FileEntry, 'path' | 'name'>) => {
+    if (!server) {
+      return;
+    }
+
+    const pathname = shouldOpenFileInViewer(entry.name)
+      ? '/files/view/[id]'
+      : '/files/editor/[id]';
+
+    router.push({
+      pathname,
+      params: {
+        id: server.id,
+        path: entry.path,
+        name: entry.name,
+      },
+    });
+  };
+
   const handlePressEntry = (entry: FileEntry) => {
     if (!server || isMutating) {
       return;
@@ -270,7 +296,7 @@ export default function FileBrowserScreen() {
       return;
     }
 
-    Alert.alert('暂未支持文件预览', '第一版先完成真实目录浏览，文件预览和编辑会在后续版本补上。');
+    openFileEntry(entry);
   };
 
   const handleLongPressEntry = (entry: FileEntry, anchor: FileActionMenuAnchor) => {
@@ -377,6 +403,50 @@ export default function FileBrowserScreen() {
     );
   };
 
+  const handleCompressEntry = async (entry: FileEntry) => {
+    if (!server || isMutating) {
+      return;
+    }
+
+    closeActionMenu();
+
+    try {
+      await compressEntries(server, [entry.path]);
+    } catch (error) {
+      Alert.alert('压缩失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
+  const handleCompressSelected = async () => {
+    if (!server || selectedEntries.length === 0 || isMutating) {
+      return;
+    }
+
+    try {
+      await compressEntries(
+        server,
+        selectedEntries.map((entry) => entry.path),
+      );
+      resetSelectionMode();
+    } catch (error) {
+      Alert.alert('压缩失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
+  const handleExtractEntry = async (entry: FileEntry) => {
+    if (!server || isMutating) {
+      return;
+    }
+
+    closeActionMenu();
+
+    try {
+      await extractArchive(server, entry.path);
+    } catch (error) {
+      Alert.alert('解压失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
   const handleStagePendingOperation = (
     mode: 'copy' | 'move',
     entryPaths: string[],
@@ -465,6 +535,19 @@ export default function FileBrowserScreen() {
     closeActionMenu();
     try {
       await startDownload(server, entry);
+    } catch (error) {
+      Alert.alert('下载失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
+  const handleDownloadSelected = async () => {
+    if (!server || selectedEntries.length === 0 || isMutating) {
+      return;
+    }
+
+    try {
+      await startSelectionDownload(server, browser?.currentPath ?? '/', selectedEntries);
+      resetSelectionMode();
     } catch (error) {
       Alert.alert('下载失败', error instanceof Error ? error.message : '未知错误');
     }
@@ -568,12 +651,59 @@ export default function FileBrowserScreen() {
                 ...(!activeActionEntry.isDirectory
                   ? [
                       {
+                        key: shouldOpenFileInViewer(activeActionEntry.name) ? 'preview' : 'edit',
+                        icon: shouldOpenFileInViewer(activeActionEntry.name)
+                          ? ('eye-outline' as const)
+                          : ('create-outline' as const),
+                        label: shouldOpenFileInViewer(activeActionEntry.name) ? '预览' : '编辑',
+                        disabled: isMutating,
+                        onPress: () => {
+                          closeActionMenu();
+                          openFileEntry(activeActionEntry);
+                        },
+                      },
+                      {
                         key: 'download',
                         icon: 'download-outline' as const,
                         label: '下载',
                         disabled: isMutating,
                         onPress: () => {
                           void handleDownloadEntry(activeActionEntry);
+                        },
+                      },
+                      {
+                        key: 'compress',
+                        icon: 'archive-outline' as const,
+                        label: '压缩',
+                        disabled: isMutating,
+                        onPress: () => {
+                          void handleCompressEntry(activeActionEntry);
+                        },
+                      },
+                      ...(isSupportedTarArchiveName(activeActionEntry.name)
+                        ? [
+                            {
+                              key: 'extract',
+                              icon: 'file-tray-full-outline' as const,
+                              label: '解压',
+                              disabled: isMutating,
+                              onPress: () => {
+                                void handleExtractEntry(activeActionEntry);
+                              },
+                            },
+                          ]
+                        : []),
+                    ]
+                  : []),
+                ...(activeActionEntry.isDirectory
+                  ? [
+                      {
+                        key: 'compress',
+                        icon: 'archive-outline' as const,
+                        label: '压缩',
+                        disabled: isMutating,
+                        onPress: () => {
+                          void handleCompressEntry(activeActionEntry);
                         },
                       },
                     ]
@@ -667,6 +797,46 @@ export default function FileBrowserScreen() {
               >
                 <Ionicons
                   name="copy-outline"
+                  size={18}
+                  color={selectedEntries.length > 0 ? colors.accent : colors.textTertiary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor:
+                      selectedEntries.length > 0 ? colors.card : colors.backgroundSecondary,
+                  },
+                ]}
+                disabled={selectedEntries.length === 0 || isMutating}
+                onPress={() => {
+                  void handleCompressSelected();
+                }}
+              >
+                <Ionicons
+                  name="archive-outline"
+                  size={18}
+                  color={selectedEntries.length > 0 ? colors.accent : colors.textTertiary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor:
+                      selectedEntries.length > 0 ? colors.card : colors.backgroundSecondary,
+                  },
+                ]}
+                disabled={selectedEntries.length === 0 || isMutating}
+                onPress={() => {
+                  void handleDownloadSelected();
+                }}
+              >
+                <Ionicons
+                  name="download-outline"
                   size={18}
                   color={selectedEntries.length > 0 ? colors.accent : colors.textTertiary}
                 />

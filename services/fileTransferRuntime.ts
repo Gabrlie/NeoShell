@@ -4,6 +4,10 @@ import type { FileEntry, FileTransferTask, ServerConfig } from '@/types';
 import { createSSHClient, normalizeSSHError } from '@/services/ssh';
 import { joinRemotePath } from '@/services/fileService';
 import type { SSHNativeClient } from '@/services/sshNative';
+import {
+  createTemporaryRemoteArchive,
+  type FileActionTargetEntry,
+} from '@/services/fileActions';
 
 import {
   openDownloadedTransferFile,
@@ -24,6 +28,7 @@ export interface PreparedUploadTransfer {
 export interface PreparedDownloadTransfer {
   fileName: string;
   remotePath: string;
+  cleanupRemotePath?: string;
   totalBytes: number;
   localUri: string;
   localPath: string;
@@ -465,6 +470,41 @@ export function prepareDownloadTransfer(
   };
 }
 
+export async function prepareBundledDownloadTransfer(
+  server: ServerConfig,
+  sourceDirectoryPath: string,
+  entries: FileActionTargetEntry[],
+  taskId: string,
+): Promise<PreparedDownloadTransfer> {
+  const remoteArchive = await createTemporaryRemoteArchive(
+    server,
+    sourceDirectoryPath,
+    entries,
+    taskId,
+  );
+
+  const prepared = prepareDownloadTransfer(
+    server.id,
+    {
+      id: remoteArchive.remotePath,
+      name: remoteArchive.fileName,
+      path: remoteArchive.remotePath,
+      isDirectory: false,
+      sizeBytes: remoteArchive.sizeBytes,
+      size: `${remoteArchive.sizeBytes} B`,
+      modifiedAt: '',
+      permissions: '',
+      isParentLink: false,
+    },
+    taskId,
+  );
+
+  return {
+    ...prepared,
+    cleanupRemotePath: remoteArchive.remotePath,
+  };
+}
+
 export async function startUploadTransfer(
   server: ServerConfig,
   task: FileTransferTask,
@@ -572,9 +612,15 @@ export async function startDownloadTransfer(
         if (tempFile.exists) {
           tempFile.delete();
         }
+        if (task.cleanupRemotePath) {
+          await deleteRemotePath(client, task.cleanupRemotePath);
+        }
         return { kind: 'canceled' };
       }
 
+      if (task.cleanupRemotePath) {
+        await deleteRemotePath(client, task.cleanupRemotePath);
+      }
       throw error;
     }
 
@@ -583,12 +629,19 @@ export async function startDownloadTransfer(
       if (stoppedResult.kind === 'canceled' && tempFile.exists) {
         tempFile.delete();
       }
+      if (stoppedResult.kind === 'canceled' && task.cleanupRemotePath) {
+        await deleteRemotePath(client, task.cleanupRemotePath);
+      }
       return stoppedResult;
     }
 
     const finalFile = resolveUniqueDownloadFileFromUri(task.localUri!);
 
     tempFile.move(finalFile);
+
+    if (task.cleanupRemotePath) {
+      await deleteRemotePath(client, task.cleanupRemotePath);
+    }
 
     return {
       kind: 'success',
