@@ -4,7 +4,26 @@ export interface SSHNativeClient {
   startShell?(ptyType: string): Promise<string>;
   writeToShell?(command: string): Promise<string>;
   closeShell?(): void;
+  connectSFTP?(): Promise<void>;
+  sftpLs?(path: string): Promise<SFTPLsResult[]>;
+  sftpMkdir?(path: string): Promise<void>;
+  sftpRename?(oldPath: string, newPath: string): Promise<void>;
+  sftpRm?(path: string): Promise<void>;
+  sftpRmdir?(path: string): Promise<void>;
+  sftpUpload?(localFilePath: string, remoteFilePath: string): Promise<void>;
+  sftpDownload?(remoteFilePath: string, localFilePath: string): Promise<string>;
   disconnect(): void;
+}
+
+export interface SFTPLsResult {
+  filename: string;
+  isDirectory: boolean;
+  modificationDate: string;
+  lastAccess: string;
+  fileSize: number;
+  ownerUserID: number;
+  ownerGroupID: number;
+  flags: number;
 }
 
 export interface SSHNativeStatic {

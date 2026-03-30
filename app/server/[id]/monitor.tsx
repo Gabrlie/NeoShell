@@ -86,8 +86,16 @@ export default function MonitorDetailScreen() {
           <Text style={[styles.headerTitle, { color: colors.text }]}>{server?.name}</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.headerBtn}>
-            <Ionicons name="folder-outline" size={22} color={colors.accent} />
+          <TouchableOpacity
+            style={styles.headerBtn}
+            disabled={server.dataSource !== 'ssh'}
+            onPress={() => router.push({ pathname: '/files/[id]', params: { id: server.id } })}
+          >
+            <Ionicons
+              name="folder-outline"
+              size={22}
+              color={server.dataSource === 'ssh' ? colors.accent : colors.textTertiary}
+            />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerBtn}

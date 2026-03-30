@@ -1,5 +1,5 @@
 import { View, StyleSheet, type ViewProps } from 'react-native';
-import { useTheme } from '@/hooks';
+import { useTheme } from '@/hooks/useTheme';
 import { BorderRadius, Spacing } from '@/theme';
 
 interface CardProps extends ViewProps {

@@ -21,6 +21,16 @@ export {
   resetMonitorBaseline,
 } from './monitorService';
 export {
+  createParentDirectoryEntry,
+  getParentRemotePath,
+  joinRemotePath,
+  listRemoteDirectory,
+  normalizeRemotePath,
+} from './fileService';
+export {
+  shouldInterceptFileBrowserBack,
+} from './fileNavigation';
+export {
   MAX_MONITOR_FAILURES,
   getMonitorFailureState,
 } from './monitorRuntime';
@@ -53,6 +63,7 @@ export {
   getTerminalKeyboardOverlapHeight,
   getTerminalShortcutBarOffset,
   getTerminalShortcutBarBottomInset,
+  getTerminalShortcutBarReservedSpace,
   type TerminalContentContainerMode,
 } from './terminalLayout';
 export {

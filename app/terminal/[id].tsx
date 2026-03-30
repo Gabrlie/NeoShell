@@ -23,6 +23,7 @@ import {
   getTerminalKeyboardOverlapHeight,
   getTerminalShortcutBarOffset,
   getTerminalShortcutBarBottomInset,
+  getTerminalShortcutBarReservedSpace,
   getTerminalSurfaceResetState,
   isTerminalWebViewAvailable,
   resolveTerminalShortcutInput,
@@ -64,7 +65,10 @@ export default function TerminalSessionScreen() {
   const contentContainerMode = getTerminalContentContainerMode(Platform.OS);
   const shortcutBarBottomInset = getTerminalShortcutBarBottomInset(insets.bottom, isKeyboardVisible);
   const shortcutBarOffset = getTerminalShortcutBarOffset(keyboardHeight, insets.bottom, isKeyboardVisible);
-  const shortcutBarReservedSpace = shortcutBarHeight + shortcutBarBottomInset + shortcutBarOffset;
+  const shortcutBarReservedSpace = getTerminalShortcutBarReservedSpace(
+    shortcutBarHeight,
+    shortcutBarOffset,
+  );
 
   useEffect(() => {
     if (!isHydrated && !isHydrating) {

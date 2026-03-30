@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/hooks';
+import { useTheme } from '@/hooks/useTheme';
 import { Typography, Spacing, BorderRadius } from '@/theme';
 
 export interface FileItemData {
@@ -75,10 +75,6 @@ export function FileListItem({ item, onPress, onLongPress }: FileListItemProps) 
           </Text>
         </View>
       </View>
-      
-      <TouchableOpacity style={styles.moreBtn}>
-        <Ionicons name="ellipsis-vertical" size={20} color={colors.textTertiary} />
-      </TouchableOpacity>
     </TouchableOpacity>
   );
 }
@@ -110,9 +106,5 @@ const styles = StyleSheet.create({
   detailText: {
     ...Typography.caption,
     fontSize: 11,
-  },
-  moreBtn: {
-    padding: Spacing.sm,
-    marginLeft: Spacing.sm,
   },
 });

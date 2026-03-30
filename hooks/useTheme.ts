@@ -5,7 +5,7 @@
 
 import { useColorScheme } from 'react-native';
 import { Colors, type ThemeColors } from '@/theme';
-import { useSettingsStore } from '@/stores';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 interface UseThemeReturn {
   /** 当前颜色方案 */

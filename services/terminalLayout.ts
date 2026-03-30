@@ -23,6 +23,13 @@ export function getTerminalShortcutBarOffset(
   return Math.max(0, keyboardHeight);
 }
 
+export function getTerminalShortcutBarReservedSpace(
+  shortcutBarHeight: number,
+  shortcutBarOffset: number,
+): number {
+  return shortcutBarHeight + shortcutBarOffset;
+}
+
 export function getTerminalKeyboardOverlapHeight(
   windowHeight: number,
   keyboardHeight: number,

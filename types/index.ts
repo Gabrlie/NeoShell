@@ -7,3 +7,4 @@ export * from './monitor';
 export * from './docker';
 export * from './settings';
 export * from './credential';
+export * from './file';

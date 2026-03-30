@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
-import { useTheme } from '@/hooks';
+import { useTheme } from '@/hooks/useTheme';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -59,6 +59,12 @@ function RootLayoutNav() {
         />
         <Stack.Screen
           name="terminal/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="files/[id]"
           options={{
             headerShown: false,
           }}
