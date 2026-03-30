@@ -112,10 +112,14 @@ function formatFilePermissions(flags: number, isDirectory: boolean): string {
 }
 
 function toFileEntry(basePath: string, item: SFTPLsResult): FileEntry {
+  const normalizedName = item.isDirectory
+    ? item.filename.replace(/\/$/, '')
+    : item.filename;
+
   return {
-    id: joinRemotePath(basePath, item.filename),
-    name: item.filename,
-    path: joinRemotePath(basePath, item.filename),
+    id: joinRemotePath(basePath, normalizedName),
+    name: normalizedName,
+    path: joinRemotePath(basePath, normalizedName),
     isDirectory: item.isDirectory,
     sizeBytes: item.fileSize,
     size: item.isDirectory ? '--' : formatBytes(item.fileSize),

@@ -10,9 +10,9 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Card } from '@/components/ui';
-import { useTheme } from '@/hooks';
-import { useServerStore } from '@/stores';
+import { Card } from '@/components/ui/Card';
+import { useTheme } from '@/hooks/useTheme';
+import { useServerStore } from '@/stores/serverStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 
 export default function TerminalEntryScreen() {

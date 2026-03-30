@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,15 +13,56 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FileActionMenu } from '@/components/files/FileActionMenu';
+import { FileConfirmDialog } from '@/components/files/FileConfirmDialog';
 import { FileListItem } from '@/components/files/FileListItem';
+import { FileNameDialog } from '@/components/files/FileNameDialog';
+import { FilePendingOperationBar } from '@/components/files/FilePendingOperationBar';
+import { FileTransferToast } from '@/components/files/FileTransferToast';
 import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/hooks/useTheme';
 import { shouldInterceptFileBrowserBack } from '@/services/fileNavigation';
+import { getFilePendingOperationBlockedReason } from '@/services/filePendingOperation';
 import { createParentDirectoryEntry } from '@/services/fileService';
 import { useFileStore } from '@/stores/fileStore';
 import { useServerStore } from '@/stores/serverStore';
+import { useTransferStore } from '@/stores/transferStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 import type { FileEntry } from '@/types';
+import type { FileActionMenuAnchor } from '@/types/file';
+
+type FileDialogState =
+  | {
+      type: 'create-file';
+      title: string;
+      placeholder: string;
+      description?: string;
+      confirmLabel: string;
+      defaultValue?: string;
+    }
+  | {
+      type: 'create-directory';
+      title: string;
+      placeholder: string;
+      description?: string;
+      confirmLabel: string;
+      defaultValue?: string;
+    }
+  | {
+      type: 'rename';
+      title: string;
+      placeholder: string;
+      description?: string;
+      confirmLabel: string;
+      defaultValue: string;
+      entryPath: string;
+    };
+
+interface FileDeleteConfirmState {
+  title: string;
+  description: string;
+  paths: string[];
+}
 
 export default function FileBrowserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,8 +80,32 @@ export default function FileBrowserScreen() {
   const refreshDirectory = useFileStore((state) => state.refreshDirectory);
   const openDirectory = useFileStore((state) => state.openDirectory);
   const openParentDirectory = useFileStore((state) => state.openParentDirectory);
+  const createFile = useFileStore((state) => state.createFile);
+  const createDirectory = useFileStore((state) => state.createDirectory);
+  const renameEntry = useFileStore((state) => state.renameEntry);
+  const deleteEntries = useFileStore((state) => state.deleteEntries);
+  const stageCopyEntries = useFileStore((state) => state.stageCopyEntries);
+  const stageMoveEntries = useFileStore((state) => state.stageMoveEntries);
+  const clearPendingOperation = useFileStore((state) => state.clearPendingOperation);
+  const executePendingOperation = useFileStore((state) => state.executePendingOperation);
+  const startUpload = useTransferStore((state) => state.startUpload);
+  const startDownload = useTransferStore((state) => state.startDownload);
+  const startToast = useTransferStore((state) => (id ? state.startToasts[id] : undefined));
+  const dismissStartToast = useTransferStore((state) => state.dismissStartToast);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [dialogState, setDialogState] = useState<FileDialogState | null>(null);
+  const [deleteConfirmState, setDeleteConfirmState] = useState<FileDeleteConfirmState | null>(null);
+  const [activeActionEntry, setActiveActionEntry] = useState<FileEntry | null>(null);
+  const [actionMenuAnchor, setActionMenuAnchor] = useState<FileActionMenuAnchor | null>(null);
   const bypassNextRemoveRef = useRef(false);
+  const previousPathRef = useRef<string | undefined>(undefined);
+
+  const closeActionMenu = useCallback(() => {
+    setActiveActionEntry(null);
+    setActionMenuAnchor(null);
+  }, []);
 
   useEffect(() => {
     if (!isHydrated && !isHydrating) {
@@ -58,6 +123,22 @@ export default function FileBrowserScreen() {
     const parentEntry = createParentDirectoryEntry(browser.currentPath);
     return parentEntry ? [parentEntry, ...browser.entries] : browser.entries;
   }, [browser]);
+  const selectedEntries = useMemo(() => {
+    if (!browser) {
+      return [];
+    }
+
+    const selectedPathSet = new Set(selectedPaths);
+    return browser.entries.filter((entry) => selectedPathSet.has(entry.path));
+  }, [browser, selectedPaths]);
+  const pendingOperation = browser?.pendingOperation;
+  const pendingOperationBlockedReason = useMemo(() => {
+    if (!browser?.pendingOperation) {
+      return undefined;
+    }
+
+    return getFilePendingOperationBlockedReason(browser.pendingOperation, browser.currentPath);
+  }, [browser?.currentPath, browser?.pendingOperation]);
 
   useEffect(() => {
     if (!server || server.dataSource !== 'ssh') {
@@ -70,11 +151,49 @@ export default function FileBrowserScreen() {
   }, [browser, loadDirectory, server]);
 
   useEffect(() => {
+    const currentPath = browser?.currentPath;
+    if (!currentPath) {
+      return;
+    }
+
+    if (previousPathRef.current && previousPathRef.current !== currentPath) {
+      setSelectionMode(false);
+      setSelectedPaths([]);
+      setMenuVisible(false);
+      closeActionMenu();
+      setDeleteConfirmState(null);
+    }
+
+    previousPathRef.current = currentPath;
+  }, [browser?.currentPath]);
+
+  useEffect(() => {
+    if (!id || !startToast) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      dismissStartToast(id);
+    }, 2800);
+
+    return () => clearTimeout(timer);
+  }, [dismissStartToast, id, startToast]);
+
+  useEffect(() => {
     if (!server || server.dataSource !== 'ssh') {
       return;
     }
 
     return navigation.addListener('beforeRemove', (event) => {
+      if (selectionMode) {
+        event.preventDefault();
+        setSelectionMode(false);
+        setSelectedPaths([]);
+        setMenuVisible(false);
+        closeActionMenu();
+        return;
+      }
+
       const bypassNextRemove = bypassNextRemoveRef.current;
 
       if (
@@ -92,6 +211,7 @@ export default function FileBrowserScreen() {
 
       event.preventDefault();
       setMenuVisible(false);
+      closeActionMenu();
       void openParentDirectory(server);
     });
   }, [
@@ -99,11 +219,44 @@ export default function FileBrowserScreen() {
     isSSHFileBrowserReady,
     navigation,
     openParentDirectory,
+    selectionMode,
     server,
+    closeActionMenu,
   ]);
 
+  const isMutating = Boolean(browser?.isMutating);
+
+  const resetSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedPaths([]);
+  };
+
+  const enterSelectionMode = (entryPath?: string) => {
+    setMenuVisible(false);
+    closeActionMenu();
+    setSelectionMode(true);
+    setSelectedPaths(entryPath ? [entryPath] : []);
+  };
+
+  const toggleSelectedPath = (path: string) => {
+    setSelectedPaths((current) =>
+      current.includes(path)
+        ? current.filter((item) => item !== path)
+        : [...current, path],
+    );
+  };
+
   const handlePressEntry = (entry: FileEntry) => {
-    if (!server) {
+    if (!server || isMutating) {
+      return;
+    }
+
+    if (selectionMode) {
+      if (entry.isParentLink) {
+        return;
+      }
+
+      toggleSelectedPath(entry.path);
       return;
     }
 
@@ -120,8 +273,23 @@ export default function FileBrowserScreen() {
     Alert.alert('暂未支持文件预览', '第一版先完成真实目录浏览，文件预览和编辑会在后续版本补上。');
   };
 
+  const handleLongPressEntry = (entry: FileEntry, anchor: FileActionMenuAnchor) => {
+    if (isMutating || entry.isParentLink) {
+      return;
+    }
+
+    if (selectionMode) {
+      toggleSelectedPath(entry.path);
+      return;
+    }
+
+    setMenuVisible(false);
+    setActionMenuAnchor(anchor);
+    setActiveActionEntry(entry);
+  };
+
   const handleRefresh = () => {
-    if (!server) {
+    if (!server || isMutating) {
       return;
     }
 
@@ -130,8 +298,211 @@ export default function FileBrowserScreen() {
 
   const handleHeaderBack = () => {
     bypassNextRemoveRef.current = true;
+    resetSelectionMode();
+    setDialogState(null);
+    setDeleteConfirmState(null);
+    closeActionMenu();
     setMenuVisible(false);
     router.back();
+  };
+
+  const handleOpenCreateFileDialog = () => {
+    setMenuVisible(false);
+    closeActionMenu();
+    setDialogState({
+      type: 'create-file',
+      title: '新建文件',
+      placeholder: '例如 nginx.conf',
+      description: '第一版只创建空文件，不会自动打开编辑器。',
+      confirmLabel: '创建',
+      defaultValue: '',
+    });
+  };
+
+  const handleOpenCreateDirectoryDialog = () => {
+    setMenuVisible(false);
+    closeActionMenu();
+    setDialogState({
+      type: 'create-directory',
+      title: '新建文件夹',
+      placeholder: '例如 backup',
+      confirmLabel: '创建',
+      defaultValue: '',
+    });
+  };
+
+  const handleOpenRenameDialog = (entry: FileEntry) => {
+    closeActionMenu();
+    setDialogState({
+      type: 'rename',
+      title: entry.isDirectory ? '重命名文件夹' : '重命名文件',
+      placeholder: '输入新名称',
+      confirmLabel: '保存',
+      defaultValue: entry.name,
+      entryPath: entry.path,
+    });
+  };
+
+  const handleDeletePaths = (paths: string[], title: string, message: string) => {
+    if (!server || isMutating) {
+      return;
+    }
+
+    setDeleteConfirmState({
+      title,
+      description: message,
+      paths,
+    });
+  };
+
+  const handleDeleteEntry = (entry: FileEntry) => {
+    closeActionMenu();
+    const suffix = entry.isDirectory ? '这会递归删除目录中的所有内容。' : '此操作无法撤销。';
+    handleDeletePaths(
+      [entry.path],
+      '确认删除',
+      `确定删除「${entry.name}」吗？\n${suffix}`,
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedEntries.length === 0) {
+      return;
+    }
+
+    handleDeletePaths(
+      selectedEntries.map((entry) => entry.path),
+      '确认批量删除',
+      `确定删除已选中的 ${selectedEntries.length} 项吗？此操作无法撤销。`,
+    );
+  };
+
+  const handleStagePendingOperation = (
+    mode: 'copy' | 'move',
+    entryPaths: string[],
+  ) => {
+    if (!id || isMutating) {
+      return;
+    }
+
+    closeActionMenu();
+    setMenuVisible(false);
+    resetSelectionMode();
+
+    try {
+      if (mode === 'copy') {
+        stageCopyEntries(id, entryPaths);
+      } else {
+        stageMoveEntries(id, entryPaths);
+      }
+    } catch (error) {
+      Alert.alert('操作失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
+  const handleCopyEntry = (entry: FileEntry) => {
+    handleStagePendingOperation('copy', [entry.path]);
+  };
+
+  const handleMoveEntry = (entry: FileEntry) => {
+    handleStagePendingOperation('move', [entry.path]);
+  };
+
+  const handleCopySelected = () => {
+    if (selectedEntries.length === 0) {
+      return;
+    }
+
+    handleStagePendingOperation('copy', selectedEntries.map((entry) => entry.path));
+  };
+
+  const handleMoveSelected = () => {
+    if (selectedEntries.length === 0) {
+      return;
+    }
+
+    handleStagePendingOperation('move', selectedEntries.map((entry) => entry.path));
+  };
+
+  const handleCancelPendingOperation = () => {
+    if (!id) {
+      return;
+    }
+
+    clearPendingOperation(id);
+  };
+
+  const handleExecutePendingOperation = async () => {
+    if (!server) {
+      return;
+    }
+
+    try {
+      await executePendingOperation(server);
+    } catch (error) {
+      Alert.alert('操作失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
+  const handleUploadFile = async () => {
+    if (!server || isMutating) {
+      return;
+    }
+
+    setMenuVisible(false);
+    try {
+      await startUpload(server, browser?.currentPath ?? '/');
+    } catch (error) {
+      Alert.alert('上传失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
+  const handleDownloadEntry = async (entry: FileEntry) => {
+    if (!server || isMutating) {
+      return;
+    }
+
+    closeActionMenu();
+    try {
+      await startDownload(server, entry);
+    } catch (error) {
+      Alert.alert('下载失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
+  const handleSubmitDialog = async (value: string) => {
+    if (!server || !dialogState) {
+      return;
+    }
+
+    try {
+      if (dialogState.type === 'create-file') {
+        await createFile(server, value);
+      } else if (dialogState.type === 'create-directory') {
+        await createDirectory(server, value);
+      } else {
+        await renameEntry(server, dialogState.entryPath, value);
+      }
+
+      setDialogState(null);
+      resetSelectionMode();
+    } catch (error) {
+      Alert.alert('操作失败', error instanceof Error ? error.message : '未知错误');
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!server || !deleteConfirmState || isMutating) {
+      return;
+    }
+
+    try {
+      await deleteEntries(server, deleteConfirmState.paths);
+      setDeleteConfirmState(null);
+      resetSelectionMode();
+    } catch (error) {
+      Alert.alert('删除失败', error instanceof Error ? error.message : '未知错误');
+    }
   };
 
   if (!server && isHydrated) {
@@ -166,12 +537,98 @@ export default function FileBrowserScreen() {
     );
   }
 
-  const isLoading = !browser || browser.status === 'loading';
-  const isReady = browser?.status === 'ready';
+  const hasEntries = Boolean(browser?.entries.length);
+  const isLoading = !browser || (browser.status === 'loading' && !hasEntries);
+  const isRefreshing = Boolean(browser && browser.status === 'loading' && hasEntries);
   const isError = browser?.status === 'error';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <FileNameDialog
+        visible={Boolean(dialogState)}
+        title={dialogState?.title ?? ''}
+        description={dialogState?.description}
+        placeholder={dialogState?.placeholder ?? ''}
+        confirmLabel={dialogState?.confirmLabel ?? '保存'}
+        defaultValue={dialogState?.defaultValue}
+        busy={isMutating}
+        onCancel={() => setDialogState(null)}
+        onConfirm={(value) => {
+          void handleSubmitDialog(value);
+        }}
+      />
+      <FileActionMenu
+        visible={Boolean(activeActionEntry)}
+        title={activeActionEntry?.name ?? ''}
+        anchor={actionMenuAnchor}
+        onClose={closeActionMenu}
+        items={
+          activeActionEntry
+            ? [
+                ...(!activeActionEntry.isDirectory
+                  ? [
+                      {
+                        key: 'download',
+                        icon: 'download-outline' as const,
+                        label: '下载',
+                        disabled: isMutating,
+                        onPress: () => {
+                          void handleDownloadEntry(activeActionEntry);
+                        },
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'copy',
+                  icon: 'copy-outline',
+                  label: '复制',
+                  disabled: isMutating,
+                  onPress: () => handleCopyEntry(activeActionEntry),
+                },
+                {
+                  key: 'move',
+                  icon: 'arrow-redo-outline',
+                  label: '移动',
+                  disabled: isMutating,
+                  onPress: () => handleMoveEntry(activeActionEntry),
+                },
+                {
+                  key: 'rename',
+                  icon: 'create-outline',
+                  label: '重命名',
+                  disabled: isMutating,
+                  onPress: () => handleOpenRenameDialog(activeActionEntry),
+                },
+                {
+                  key: 'delete',
+                  icon: 'trash-outline',
+                  label: '删除',
+                  destructive: true,
+                  disabled: isMutating,
+                  onPress: () => handleDeleteEntry(activeActionEntry),
+                },
+                {
+                  key: 'select',
+                  icon: 'checkmark-done-outline',
+                  label: '多选',
+                  disabled: isMutating,
+                  onPress: () => enterSelectionMode(activeActionEntry.path),
+                },
+              ]
+            : []
+        }
+      />
+      <FileConfirmDialog
+        visible={Boolean(deleteConfirmState)}
+        title={deleteConfirmState?.title ?? ''}
+        description={deleteConfirmState?.description ?? ''}
+        confirmLabel="删除"
+        busy={isMutating}
+        onCancel={() => setDeleteConfirmState(null)}
+        onConfirm={() => {
+          void handleConfirmDelete();
+        }}
+      />
       <View
         style={[
           styles.header,
@@ -181,27 +638,148 @@ export default function FileBrowserScreen() {
           },
         ]}
       >
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={handleHeaderBack} style={styles.headerButton}>
-            <Ionicons name="chevron-back" size={24} color={colors.textSecondary} />
-          </TouchableOpacity>
-          <View style={styles.headerTextWrap}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>{server.name}</Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              {browser?.currentPath ?? '/'}
-            </Text>
-          </View>
-        </View>
+        {selectionMode ? (
+          <>
+            <TouchableOpacity onPress={resetSelectionMode} style={styles.headerButton}>
+              <Text style={[styles.selectionCancelText, { color: colors.textSecondary }]}>取消</Text>
+            </TouchableOpacity>
+            <View style={styles.selectionTitleWrap}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>已选 {selectedEntries.length} 项</Text>
+              <Text
+                style={[styles.headerSubtitle, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {browser?.currentPath ?? '/'}
+              </Text>
+            </View>
+            <View style={styles.selectionActions}>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor:
+                      selectedEntries.length > 0 ? colors.card : colors.backgroundSecondary,
+                  },
+                ]}
+                disabled={selectedEntries.length === 0 || isMutating}
+                onPress={handleCopySelected}
+              >
+                <Ionicons
+                  name="copy-outline"
+                  size={18}
+                  color={selectedEntries.length > 0 ? colors.accent : colors.textTertiary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor:
+                      selectedEntries.length > 0 ? colors.card : colors.backgroundSecondary,
+                  },
+                ]}
+                disabled={selectedEntries.length === 0 || isMutating}
+                onPress={handleMoveSelected}
+              >
+                <Ionicons
+                  name="arrow-redo-outline"
+                  size={18}
+                  color={selectedEntries.length > 0 ? colors.accent : colors.textTertiary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor:
+                      selectedEntries.length > 0 ? colors.card : colors.backgroundSecondary,
+                  },
+                ]}
+                disabled={selectedEntries.length === 0 || isMutating}
+                onPress={handleDeleteSelected}
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={18}
+                  color={selectedEntries.length > 0 ? colors.danger : colors.textTertiary}
+                />
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity onPress={handleHeaderBack} style={styles.headerButton}>
+                <Ionicons name="chevron-back" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.headerTextWrap}>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>{server.name}</Text>
+                <Text
+                  style={[styles.headerSubtitle, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {browser?.currentPath ?? '/'}
+                </Text>
+              </View>
+            </View>
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, { borderColor: colors.border, backgroundColor: colors.card }]}
-            onPress={() => setMenuVisible((current) => !current)}
-          >
-            <Ionicons name="ellipsis-vertical" size={18} color={colors.accent} />
-          </TouchableOpacity>
-        </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                ]}
+                disabled={isMutating}
+                onPress={() => enterSelectionMode()}
+              >
+                <Ionicons name="checkmark-done-outline" size={18} color={colors.accent} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                ]}
+                disabled={isMutating}
+                onPress={() => setMenuVisible((current) => !current)}
+              >
+                <Ionicons name="ellipsis-vertical" size={18} color={colors.accent} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
+      <FileTransferToast
+        toast={startToast}
+        onPress={() => {
+          if (!server) {
+            return;
+          }
+
+          dismissStartToast(server.id);
+          router.push({ pathname: '/files/transfers/[id]', params: { id: server.id } });
+        }}
+        onDismiss={() => {
+          if (!server) {
+            return;
+          }
+
+          dismissStartToast(server.id);
+        }}
+      />
+      {pendingOperation && !selectionMode ? (
+        <FilePendingOperationBar
+          operation={pendingOperation}
+          blockedReason={pendingOperationBlockedReason}
+          busy={isMutating}
+          onExecute={() => {
+            void handleExecutePendingOperation();
+          }}
+          onCancel={handleCancelPendingOperation}
+        />
+      ) : null}
 
       {menuVisible ? (
         <>
@@ -225,6 +803,31 @@ export default function FileBrowserScreen() {
               }}
             />
             <MenuAction
+              icon="cloud-upload-outline"
+              label="上传文件"
+              onPress={() => {
+                void handleUploadFile();
+              }}
+            />
+            <MenuAction
+              icon="swap-horizontal-outline"
+              label="传输详情"
+              onPress={() => {
+                setMenuVisible(false);
+                router.push({ pathname: '/files/transfers/[id]', params: { id: server.id } });
+              }}
+            />
+            <MenuAction
+              icon="document-text-outline"
+              label="新建文件"
+              onPress={handleOpenCreateFileDialog}
+            />
+            <MenuAction
+              icon="folder-open-outline"
+              label="新建文件夹"
+              onPress={handleOpenCreateDirectoryDialog}
+            />
+            <MenuAction
               icon="home-outline"
               label="回到根目录"
               onPress={() => {
@@ -236,7 +839,7 @@ export default function FileBrowserScreen() {
         </>
       ) : null}
 
-      {isLoading && !isReady ? (
+      {isLoading ? (
         <View style={[styles.centerState, { backgroundColor: colors.background }]}>
           <ActivityIndicator color={colors.accent} />
           <Text style={[styles.stateTitle, { color: colors.text }]}>正在加载目录...</Text>
@@ -267,19 +870,35 @@ export default function FileBrowserScreen() {
                 size: item.size,
                 modifiedAt: item.modifiedAt,
                 permissions: item.permissions,
+                isParentLink: item.isParentLink,
+                selected: selectedPaths.includes(item.path),
+                selectionMode,
               }}
               onPress={() => handlePressEntry(item)}
+              onLongPress={(event) =>
+                handleLongPressEntry(item, {
+                  x: event.nativeEvent.pageX,
+                  y: event.nativeEvent.pageY,
+                })
+              }
             />
           )}
-          refreshing={Boolean(browser && browser.status === 'loading')}
+          refreshing={isRefreshing}
           onRefresh={handleRefresh}
           ListHeaderComponent={
-            browser?.error ? (
-              <View style={[styles.inlineError, { borderBottomColor: colors.warningLight }]}>
-                <Ionicons name="warning-outline" size={16} color={colors.warning} />
-                <Text style={[styles.inlineErrorText, { color: colors.warning }]} numberOfLines={2}>
-                  {browser.error}
-                </Text>
+            browser?.error || browser?.mutationError ? (
+              <View>
+                {browser.error || browser.mutationError ? (
+                  <View style={[styles.inlineError, { borderBottomColor: colors.warningLight }]}>
+                    <Ionicons name="warning-outline" size={16} color={colors.warning} />
+                    <Text
+                      style={[styles.inlineErrorText, { color: colors.warning }]}
+                      numberOfLines={2}
+                    >
+                      {browser.mutationError ?? browser.error}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             ) : null
           }
@@ -354,6 +973,23 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  selectionTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+  },
+  selectionCancelText: {
+    ...Typography.body,
+    fontWeight: '600',
   },
   actionButton: {
     width: 40,

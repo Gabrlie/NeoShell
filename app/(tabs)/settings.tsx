@@ -6,7 +6,7 @@ import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import { useTheme } from '@/hooks';
+import { useTheme } from '@/hooks/useTheme';
 import { Spacing, Typography, BorderRadius } from '@/theme';
 
 interface SettingItem {

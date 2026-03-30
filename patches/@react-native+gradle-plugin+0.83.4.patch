@@ -1,8 +1,8 @@
 diff --git a/node_modules/@react-native/gradle-plugin/settings.gradle.kts b/node_modules/@react-native/gradle-plugin/settings.gradle.kts
-index b3c46a3..b29009d 100644
+index b3c46a3..c990c67 100644
 --- a/node_modules/@react-native/gradle-plugin/settings.gradle.kts
 +++ b/node_modules/@react-native/gradle-plugin/settings.gradle.kts
-@@ -7,11 +7,14 @@
+@@ -7,13 +7,16 @@
  
  pluginManagement {
    repositories {
@@ -19,3 +19,4 @@ index b3c46a3..b29009d 100644
 +plugins { id("org.gradle.toolchains.foojay-resolver-convention").version("1.0.0") }
  
  include(
+     ":react-native-gradle-plugin",

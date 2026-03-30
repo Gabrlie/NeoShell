@@ -18,11 +18,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 
-import { ServerCard } from '@/components/monitor';
-import { Card } from '@/components/ui';
-import { useServerMonitoring, useTheme } from '@/hooks';
+import { ServerCard } from '@/components/monitor/ServerCard';
+import { Card } from '@/components/ui/Card';
+import { useServerMonitoring } from '@/hooks/useServerMonitoring';
+import { useTheme } from '@/hooks/useTheme';
 import { toServerCardData } from '@/services/monitorMappers';
-import { useMonitorStore, useServerStore } from '@/stores';
+import { useMonitorStore } from '@/stores/monitorStore';
+import { useServerStore } from '@/stores/serverStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 import type { ServerConfig } from '@/types';
 

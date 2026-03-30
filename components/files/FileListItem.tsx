@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { Typography, Spacing, BorderRadius } from '@/theme';
@@ -9,18 +9,22 @@ export interface FileItemData {
   size: string;
   modifiedAt: string;
   permissions: string;
+  isParentLink?: boolean;
+  selected?: boolean;
+  selectionMode?: boolean;
 }
 
 interface FileListItemProps {
   item: FileItemData;
   onPress?: () => void;
-  onLongPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
 }
 
 export function FileListItem({ item, onPress, onLongPress }: FileListItemProps) {
   const { colors } = useTheme();
 
   const getIconName = () => {
+    if (item.isParentLink) return 'return-up-back';
     if (item.isDirectory) return 'folder';
     const ext = item.name.split('.').pop()?.toLowerCase();
     switch (ext) {
@@ -52,9 +56,15 @@ export function FileListItem({ item, onPress, onLongPress }: FileListItemProps) 
 
   return (
     <TouchableOpacity
-      style={[styles.container, { borderBottomColor: colors.border }]}
+      style={[
+        styles.container,
+        {
+          borderBottomColor: colors.border,
+          backgroundColor: item.selected ? colors.accentLight : 'transparent',
+        },
+      ]}
       onPress={onPress}
-      onLongPress={onLongPress}
+      onLongPress={(event) => onLongPress?.(event)}
       activeOpacity={0.7}
     >
       <Ionicons name={getIconName()} size={28} color={getIconColor()} style={styles.icon} />
@@ -75,6 +85,14 @@ export function FileListItem({ item, onPress, onLongPress }: FileListItemProps) 
           </Text>
         </View>
       </View>
+
+      {item.selectionMode && !item.isParentLink ? (
+        <Ionicons
+          name={item.selected ? 'checkmark-circle' : 'ellipse-outline'}
+          size={22}
+          color={item.selected ? colors.accent : colors.textTertiary}
+        />
+      ) : null}
     </TouchableOpacity>
   );
 }

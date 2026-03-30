@@ -28,6 +28,12 @@ export {
   normalizeRemotePath,
 } from './fileService';
 export {
+  createRemoteDirectory,
+  createRemoteFile,
+  deleteRemoteEntries,
+  renameRemoteEntry,
+} from './fileActions';
+export {
   shouldInterceptFileBrowserBack,
 } from './fileNavigation';
 export {

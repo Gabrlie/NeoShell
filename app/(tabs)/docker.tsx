@@ -3,9 +3,9 @@
  */
 
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useTheme } from '@/hooks';
+import { useTheme } from '@/hooks/useTheme';
 import { Typography, Spacing } from '@/theme';
-import { ContainerCard, type ContainerData } from '@/components/docker';
+import { ContainerCard, type ContainerData } from '@/components/docker/ContainerCard';
 
 const MOCK_CONTAINERS: ContainerData[] = [
   { id: '1', name: 'nginx-proxy', image: 'nginx:latest', state: 'running', status: 'Up 15 days', ports: '80:80, 443:443', cpu: '0.5%', mem: '64MB' },

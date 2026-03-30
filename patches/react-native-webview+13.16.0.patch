@@ -1,9 +1,8 @@
 diff --git a/node_modules/react-native-webview/android/build.gradle b/node_modules/react-native-webview/android/build.gradle
-index e686b77..6d3d1eb 100644
+index cb3476a..d1389c6 100644
 --- a/node_modules/react-native-webview/android/build.gradle
 +++ b/node_modules/react-native-webview/android/build.gradle
-@@ -4,7 +4,11 @@ buildscript {
-     ext.safeExtGet = {prop ->
+@@ -5,7 +5,11 @@ buildscript {
          rootProject.ext.has(prop) ? rootProject.ext.get(prop) : project.properties['ReactNativeWebView_' + prop]
      }
      repositories {
@@ -15,7 +14,7 @@ index e686b77..6d3d1eb 100644
          gradlePluginPortal()
      }
      dependencies {
-@@ -77,6 +81,8 @@ repositories {
+@@ -99,6 +103,8 @@ repositories {
      maven {
          url "${reactNativePath}/android"
      }

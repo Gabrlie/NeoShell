@@ -1,6 +1,6 @@
 export interface SSHNativeClient {
   execute(command: string): Promise<string>;
-  on?(eventName: string, handler: (value: string) => void): void;
+  on?(eventName: string, handler: (value: unknown) => void): void;
   startShell?(ptyType: string): Promise<string>;
   writeToShell?(command: string): Promise<string>;
   closeShell?(): void;
@@ -12,6 +12,20 @@ export interface SSHNativeClient {
   sftpRmdir?(path: string): Promise<void>;
   sftpUpload?(localFilePath: string, remoteFilePath: string): Promise<void>;
   sftpDownload?(remoteFilePath: string, localFilePath: string): Promise<string>;
+  sftpUploadFile?(localFilePath: string, remoteFilePath: string): Promise<void>;
+  sftpDownloadFile?(remoteFilePath: string, localFilePath: string): Promise<string>;
+  sftpResumeUploadFile?(
+    localFilePath: string,
+    remoteFilePath: string,
+    remoteOffset: number
+  ): Promise<void>;
+  sftpResumeDownloadFile?(
+    remoteFilePath: string,
+    localFilePath: string,
+    localOffset: number
+  ): Promise<string>;
+  sftpCancelUpload?(): void;
+  sftpCancelDownload?(): void;
   disconnect(): void;
 }
 

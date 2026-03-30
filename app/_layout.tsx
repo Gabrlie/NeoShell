@@ -70,6 +70,12 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="files/transfers/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
           name="modal"
           options={{ presentation: 'modal', title: '新增服务器' }}
         />

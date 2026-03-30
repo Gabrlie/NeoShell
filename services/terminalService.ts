@@ -17,7 +17,7 @@ class SSHInteractiveTerminalSession implements TerminalSession {
   private isClosed = false;
 
   constructor(private readonly client: SSHNativeClient) {
-    this.client.on?.('Shell', (value: string) => {
+    this.client.on?.('Shell', (value: unknown) => {
       const chunk = typeof value === 'string' ? value : String(value ?? '');
       if (!chunk) {
         return;
