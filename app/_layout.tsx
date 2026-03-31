@@ -88,6 +88,49 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="docker/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="docker/container/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="docker/compose/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="docker/create/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="docker/logs/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="docker/compose-create/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="docker/terminal/[id]"
+          options={{
+            title: '选择终端类型',
+            headerBackTitle: '返回',
+          }}
+        />
+        <Stack.Screen
           name="modal"
           options={{ presentation: 'modal', title: '新增服务器' }}
         />

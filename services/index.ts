@@ -60,6 +60,26 @@ export {
   createTerminalSession,
 } from './terminalService';
 export {
+  buildDockerExecCommand,
+  buildDockerLogsCommand,
+  buildDockerRunCommand,
+  createDockerComposeProject,
+  createDockerContainer,
+  getDockerContainerDetails,
+  getDockerContainerLogs,
+  getDockerDashboard,
+  inspectComposeFile,
+  parseComposeConfig,
+  parseComposeProjects,
+  parseDockerContainerList,
+  parseDockerImageList,
+  parseDockerVolumeList,
+  runDockerComposeAction,
+  runDockerImageAction,
+  runDockerContainerAction,
+  runDockerVolumeAction,
+} from './dockerService';
+export {
   getTerminalSurfaceResetState,
   type TerminalSurfaceResetReason,
   type TerminalSurfaceResetState,

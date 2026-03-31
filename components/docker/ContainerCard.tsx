@@ -1,37 +1,34 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/hooks';
+import { useTheme } from '@/hooks/useTheme';
 import { Typography, Spacing } from '@/theme';
-import { Card, Badge } from '../ui';
-
-export interface ContainerData {
-  id: string;
-  name: string;
-  image: string;
-  state: 'running' | 'exited' | 'created' | 'paused';
-  status: string; // e.g. "Up 2 days"
-  ports: string;
-  cpu?: string;
-  mem?: string;
-}
+import type { DockerContainer } from '@/types';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
 
 interface ContainerCardProps {
-  container: ContainerData;
+  container: DockerContainer;
   onPress?: () => void;
-  onAction?: (action: 'start' | 'stop' | 'restart' | 'logs' | 'terminal') => void;
+  onAction?: (action: 'start' | 'stop' | 'restart' | 'logs' | 'details') => void;
 }
 
 export function ContainerCard({ container, onPress, onAction }: ContainerCardProps) {
   const { colors } = useTheme();
 
   const isRunning = container.state === 'running';
-  
+
   const getBadgeVariant = () => {
-    switch(container.state) {
-      case 'running': return 'success';
-      case 'exited': return 'danger';
-      case 'paused': return 'warning';
-      default: return 'default';
+    switch (container.state) {
+      case 'running':
+        return 'success';
+      case 'exited':
+      case 'dead':
+        return 'danger';
+      case 'paused':
+      case 'restarting':
+        return 'warning';
+      default:
+        return 'default';
     }
   };
 
@@ -61,9 +58,11 @@ export function ContainerCard({ container, onPress, onAction }: ContainerCardPro
           <Text style={[styles.statText, { color: colors.textSecondary }]}>
             {container.status}
           </Text>
-          {isRunning && container.cpu && container.mem && (
+          {(container.cpuPercent != null || container.memoryUsage) && (
             <Text style={[styles.statText, { color: colors.textSecondary }]}>
-              CPU: {container.cpu} • MEM: {container.mem}
+              {container.cpuPercent != null ? `CPU: ${container.cpuPercent.toFixed(1)}%` : 'CPU: --'}
+              {' • '}
+              {container.memoryUsage ? `MEM: ${container.memoryUsage}` : 'MEM: --'}
             </Text>
           )}
         </View>
@@ -89,13 +88,23 @@ export function ContainerCard({ container, onPress, onAction }: ContainerCardPro
           <ActionBtn icon="play" label="启动" onPress={() => onAction?.('start')} color={colors.success} />
         )}
         <ActionBtn icon="document-text" label="日志" onPress={() => onAction?.('logs')} color={colors.info} />
-        <ActionBtn icon="terminal" label="终端" onPress={() => onAction?.('terminal')} color={colors.text} />
+        <ActionBtn icon="ellipsis-horizontal-circle" label="详情" onPress={() => onAction?.('details')} color={colors.text} />
       </View>
     </Card>
   );
 }
 
-function ActionBtn({ icon, label, onPress, color }: { icon: any, label: string, onPress?: () => void, color: string }) {
+function ActionBtn({
+  icon,
+  label,
+  onPress,
+  color,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress?: () => void;
+  color: string;
+}) {
   const { colors } = useTheme();
   return (
     <TouchableOpacity style={styles.actionBtn} onPress={onPress}>
@@ -108,7 +117,7 @@ function ActionBtn({ icon, label, onPress, color }: { icon: any, label: string, 
 const styles = StyleSheet.create({
   card: {
     marginBottom: Spacing.md,
-    padding: 0, // override card padding to make action bar full width
+    padding: 0,
   },
   header: {
     flexDirection: 'row',

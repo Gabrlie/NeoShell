@@ -7,3 +7,4 @@ export { useMonitorStore } from './monitorStore';
 export { useSettingsStore } from './settingsStore';
 export { usePrivateKeyStore } from './privateKeyStore';
 export { useFileStore } from './fileStore';
+export { useDockerStore } from './dockerStore';

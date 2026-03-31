@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -9,24 +9,45 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 
+import { OSIcon } from '@/components/monitor/OSIcon';
 import { Card } from '@/components/ui/Card';
+import { useServerMonitoring } from '@/hooks/useServerMonitoring';
 import { useTheme } from '@/hooks/useTheme';
+import { getOSVisualMeta } from '@/services/monitorMappers';
+import { useMonitorStore } from '@/stores/monitorStore';
 import { useServerStore } from '@/stores/serverStore';
+import type { ServerConfig } from '@/types';
 import { BorderRadius, Spacing, Typography } from '@/theme';
+import { createNavigationGuard } from '@/utils/navigationGuard';
 
 export default function FilesScreen() {
   const { colors } = useTheme();
+  const isFocused = useIsFocused();
   const servers = useServerStore((state) => state.servers);
   const isHydrated = useServerStore((state) => state.isHydrated);
   const isHydrating = useServerStore((state) => state.isHydrating);
   const hydrateServers = useServerStore((state) => state.hydrateServers);
+  const openServerGuardRef = useRef(createNavigationGuard());
 
   useEffect(() => {
     if (!isHydrated && !isHydrating) {
       void hydrateServers();
     }
   }, [hydrateServers, isHydrated, isHydrating]);
+
+  useEffect(() => {
+    if (isFocused) {
+      openServerGuardRef.current.reset();
+    }
+  }, [isFocused]);
+
+  useEffect(() => {
+    return () => {
+      openServerGuardRef.current.dispose();
+    };
+  }, []);
 
   const sshServers = useMemo(
     () => servers.filter((server) => server.dataSource === 'ssh'),
@@ -59,41 +80,63 @@ export default function FilesScreen() {
           </Card>
         ) : (
           sshServers.map((server) => (
-            <TouchableOpacity
+            <FileServerCard
               key={server.id}
-              activeOpacity={0.9}
+              server={server}
+              enabled={isFocused}
               onPress={() =>
-                router.push({ pathname: '/files/[id]', params: { id: server.id } })
+                openServerGuardRef.current.run(() => {
+                  router.push({ pathname: '/files/[id]', params: { id: server.id } });
+                })
               }
-            >
-              <Card style={styles.serverCard}>
-                <View style={styles.serverTop}>
-                  <View style={styles.serverIdentity}>
-                    <View style={[styles.serverIcon, { backgroundColor: colors.accentLight }]}>
-                      <Ionicons name="folder-open-outline" size={18} color={colors.accent} />
-                    </View>
-                    <View style={styles.serverTextWrap}>
-                      <Text style={[styles.serverName, { color: colors.text }]}>{server.name}</Text>
-                      <Text style={[styles.serverMeta, { color: colors.textSecondary }]}>
-                        {server.username}@{server.host}:{server.port}
-                      </Text>
-                    </View>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
-                </View>
-                <View style={styles.serverBottom}>
-                  <MetaBadge
-                    icon="key-outline"
-                    label={server.authMethod === 'password' ? '密码认证' : '私钥认证'}
-                  />
-                  <MetaBadge icon="folder-outline" label="SFTP 文件浏览" />
-                </View>
-              </Card>
-            </TouchableOpacity>
+            />
           ))
         )}
       </ScrollView>
     </View>
+  );
+}
+
+function FileServerCard({
+  server,
+  enabled,
+  onPress,
+}: {
+  server: ServerConfig;
+  enabled: boolean;
+  onPress: () => boolean;
+}) {
+  const { colors } = useTheme();
+  const systemInfo = useMonitorStore((state) => state.systemInfos[server.id]);
+  const osMeta = getOSVisualMeta(systemInfo?.os);
+
+  useServerMonitoring(server, {
+    enabled: enabled && !systemInfo,
+    once: true,
+  });
+
+  return (
+    <TouchableOpacity activeOpacity={0.9} onPress={() => void onPress()}>
+      <Card style={styles.serverCard}>
+        <View style={styles.serverTop}>
+          <View style={styles.serverIdentity}>
+            <View style={[styles.serverIcon, { backgroundColor: colors.accentLight }]}>
+              <OSIcon os={osMeta.os} meta={osMeta} size={18} color={colors.accent} />
+            </View>
+            <View style={styles.serverTextWrap}>
+              <Text style={[styles.serverName, { color: colors.text }]}>{server.name}</Text>
+              <Text style={[styles.serverMeta, { color: colors.textSecondary }]}>
+                {server.username}@{server.host}:{server.port}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.serverActions}>
+            <MetaBadge icon="folder-outline" label="SFTP" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+          </View>
+        </View>
+      </Card>
+    </TouchableOpacity>
   );
 }
 
@@ -189,10 +232,11 @@ const styles = StyleSheet.create({
     ...Typography.bodySmall,
     marginTop: 2,
   },
-  serverBottom: {
+  serverActions: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: Spacing.sm,
+    marginLeft: Spacing.md,
   },
   metaBadge: {
     flexDirection: 'row',

@@ -19,6 +19,7 @@ import { TerminalShortcutBar, TerminalWebView, type TerminalWebViewRef } from '@
 import { useTerminalSession, useTheme } from '@/hooks';
 import {
   applyTerminalModifiers,
+  buildDockerExecCommand,
   getTerminalContentContainerMode,
   getTerminalKeyboardOverlapHeight,
   getTerminalShortcutBarOffset,
@@ -40,7 +41,13 @@ const INITIAL_MODIFIERS: TerminalModifierState = {
 };
 
 export default function TerminalSessionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, containerId, containerName, shell, customCommand } = useLocalSearchParams<{
+    id: string;
+    containerId?: string;
+    containerName?: string;
+    shell?: 'bash' | 'sh' | 'ash' | 'custom';
+    customCommand?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const servers = useServerStore((state) => state.servers);
@@ -55,6 +62,7 @@ export default function TerminalSessionScreen() {
   const terminalRef = useRef<TerminalWebViewRef>(null);
   const pendingChunksRef = useRef<string[]>([]);
   const modifiersRef = useRef<TerminalModifierState>(INITIAL_MODIFIERS);
+  const hasBootstrappedContainerRef = useRef(false);
   const [modifiers, setModifiers] = useState<TerminalModifierState>(INITIAL_MODIFIERS);
   const [isTerminalReady, setIsTerminalReady] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -95,6 +103,7 @@ export default function TerminalSessionScreen() {
     setIsKeyboardVisible(false);
     setKeyboardHeight(0);
     setTerminalSurfaceVersion(0);
+    hasBootstrappedContainerRef.current = false;
   }, [server?.id, updateModifiers]);
 
   useEffect(() => {
@@ -169,12 +178,40 @@ export default function TerminalSessionScreen() {
     requestTerminalFit();
   }, [isTerminalReady, requestTerminalFit, status]);
 
+  useEffect(() => {
+    if (
+      status !== 'connected' ||
+      !isTerminalReady ||
+      !containerId ||
+      !shell ||
+      hasBootstrappedContainerRef.current
+    ) {
+      return;
+    }
+
+    let command: string;
+
+    try {
+      command = buildDockerExecCommand(containerId, shell, customCommand);
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    hasBootstrappedContainerRef.current = true;
+    void sendInput(`${command}\n`).catch((inputError) => {
+      setSendError(inputError instanceof Error ? inputError.message : String(inputError));
+      hasBootstrappedContainerRef.current = false;
+    });
+  }, [containerId, customCommand, isTerminalReady, sendInput, shell, status]);
+
   const resetTerminalSurface = useCallback((reason: TerminalSurfaceResetReason) => {
     pendingChunksRef.current = [];
     setSendError(undefined);
     const resetState = getTerminalSurfaceResetState(reason);
     setIsTerminalReady(resetState.nextIsReady);
     updateModifiers(INITIAL_MODIFIERS);
+    hasBootstrappedContainerRef.current = false;
     terminalRef.current?.reset();
 
     if (resetState.shouldRecreateSurface) {
@@ -289,7 +326,9 @@ export default function TerminalSessionScreen() {
           <View style={styles.headerTextWrap}>
             <Text style={[styles.headerTitle, { color: colors.text }]}>{server.name}</Text>
             <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-              {server.username}@{server.host}:{server.port}
+              {containerId
+                ? `${containerName ?? containerId} · ${shell ?? 'shell'}`
+                : `${server.username}@${server.host}:${server.port}`}
             </Text>
           </View>
         </View>
@@ -338,7 +377,9 @@ export default function TerminalSessionScreen() {
                 <ActivityIndicator color={colors.accent} />
                 <Text style={[styles.overlayTitle, { color: colors.text }]}>正在连接终端...</Text>
                 <Text style={[styles.overlayDesc, { color: colors.textSecondary }]}>
-                  正在建立 SSH 连接并启动交互式 Shell。
+                  {containerId
+                    ? '正在建立 SSH 连接，并准备自动执行 docker exec 进入容器。'
+                    : '正在建立 SSH 连接并启动交互式 Shell。'}
                 </Text>
               </View>
             ) : null}

@@ -3,7 +3,7 @@
  * 服务器卡片列表 + 搜索栏 + 监控轮询
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -27,6 +27,7 @@ import { useMonitorStore } from '@/stores/monitorStore';
 import { useServerStore } from '@/stores/serverStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 import type { ServerConfig } from '@/types';
+import { createNavigationGuard } from '@/utils/navigationGuard';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -39,12 +40,25 @@ export default function HomeScreen() {
   const hydrateServers = useServerStore((state) => state.hydrateServers);
   const searchQuery = useServerStore((state) => state.searchQuery);
   const setSearchQuery = useServerStore((state) => state.setSearchQuery);
+  const openServerGuardRef = useRef(createNavigationGuard());
 
   useEffect(() => {
     if (!isHydrated && !isHydrating) {
       void hydrateServers();
     }
   }, [hydrateServers, isHydrated, isHydrating]);
+
+  useEffect(() => {
+    if (isFocused) {
+      openServerGuardRef.current.reset();
+    }
+  }, [isFocused]);
+
+  useEffect(() => {
+    return () => {
+      openServerGuardRef.current.dispose();
+    };
+  }, []);
 
   const filteredServers = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
@@ -105,6 +119,11 @@ export default function HomeScreen() {
               server={server}
               refreshToken={refreshToken}
               enabled={isFocused}
+              onOpenMonitor={() =>
+                openServerGuardRef.current.run(() => {
+                  router.push(`/server/${server.id}/monitor`);
+                })
+              }
             />
           ))
         )}
@@ -117,10 +136,12 @@ function ServerMonitorListItem({
   server,
   refreshToken,
   enabled,
+  onOpenMonitor,
 }: {
   server: ServerConfig;
   refreshToken: number;
   enabled: boolean;
+  onOpenMonitor: () => boolean;
 }) {
   const snapshot = useMonitorStore((state) => state.snapshots[server.id]);
   const systemInfo = useMonitorStore((state) => state.systemInfos[server.id]);
@@ -145,7 +166,7 @@ function ServerMonitorListItem({
   return (
     <ServerCard
       data={cardData}
-      onPress={canOpenMonitor ? () => router.push(`/server/${server.id}/monitor`) : undefined}
+      onPress={canOpenMonitor ? () => void onOpenMonitor() : undefined}
     />
   );
 }
