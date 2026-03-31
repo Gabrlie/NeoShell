@@ -113,17 +113,14 @@ export function DockerWorkspaceTabs({
               key={tab.key}
               style={[
                 styles.tabButton,
-                {
-                  backgroundColor: active ? colors.accent : colors.backgroundSecondary,
-                  borderColor: active ? colors.accent : colors.border,
-                },
+                active && [styles.tabButtonActive, { backgroundColor: colors.cardElevated }],
               ]}
               onPress={() => goToTab(tab.key)}
             >
               <Text
                 style={[
                   styles.tabButtonText,
-                  { color: active ? colors.accentText : colors.textSecondary },
+                  { color: active ? colors.text : colors.textSecondary },
                 ]}
                 numberOfLines={1}
               >
@@ -157,7 +154,7 @@ export function DockerWorkspaceTabs({
               <DockerStatCard label="Docker 版本" value={dashboard.overview.engineVersion || '--'} tone="warning" />
             </View>
 
-            <Section title="环境概览" description="这里汇总 Docker Engine、镜像和存储卷的基础状态。">
+            <Section title="环境概览">
               <InfoRow label="当前服务器" value={server.name} />
               <InfoRow label="镜像数量" value={`${dashboard.overview.imagesTotal} 个`} />
               <InfoRow label="存储卷数量" value={`${dashboard.overview.volumesTotal} 个`} />
@@ -173,7 +170,6 @@ export function DockerWorkspaceTabs({
           >
             <Section
               title="容器列表"
-              description="这里可以查看状态、进入详情或日志，并直接新建容器。"
               actionIcon="add-outline"
               onPressAction={onOpenCreateContainer}
             >
@@ -222,7 +218,6 @@ export function DockerWorkspaceTabs({
           >
             <Section
               title="Compose 编排"
-              description="支持浏览、编辑、应用和新增编排文件。"
               actionIcon="add-outline"
               onPressAction={onOpenCreateCompose}
             >
@@ -252,10 +247,7 @@ export function DockerWorkspaceTabs({
             contentContainerStyle={styles.pageContent}
             showsVerticalScrollIndicator={false}
           >
-            <Section
-              title="镜像列表"
-              description="支持查看所有镜像，并执行强制拉取或删除。"
-            >
+            <Section title="镜像列表">
               {dashboard.images.length === 0 ? (
                 <DockerEmptySection
                   icon="albums-outline"
@@ -281,10 +273,7 @@ export function DockerWorkspaceTabs({
             contentContainerStyle={styles.pageContent}
             showsVerticalScrollIndicator={false}
           >
-            <Section
-              title="存储卷"
-              description="这里按 Docker volume 展示可见存储，并支持查看明细与删除。"
-            >
+            <Section title="存储卷">
               {dashboard.volumes.length === 0 ? (
                 <DockerEmptySection
                   icon="save-outline"
@@ -321,13 +310,11 @@ function Page({ width, children }: { width: number; children: React.ReactNode })
 
 function Section({
   title,
-  description,
   actionIcon,
   onPressAction,
   children,
 }: {
   title: string;
-  description: string;
   actionIcon?: React.ComponentProps<typeof Ionicons>['name'];
   onPressAction?: () => void;
   children: React.ReactNode;
@@ -339,9 +326,6 @@ function Section({
       <View style={styles.sectionHeader}>
         <View style={styles.sectionText}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
-          <Text style={[styles.sectionDescription, { color: colors.textSecondary }]}>
-            {description}
-          </Text>
         </View>
         {actionIcon ? (
           <TouchableOpacity
@@ -377,18 +361,26 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    marginHorizontal: Spacing.lg,
+    marginVertical: Spacing.md,
+    backgroundColor: '#00000018', // 内部暗黑背景垫底
+    borderRadius: BorderRadius.lg,
   },
   tabButton: {
     flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: BorderRadius.full,
-    minHeight: 48,
-    paddingHorizontal: Spacing.xs,
+    minHeight: 40,
+    borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tabButtonActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   tabButtonText: {
     ...Typography.caption,
@@ -423,10 +415,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...Typography.h3,
-  },
-  sectionDescription: {
-    ...Typography.bodySmall,
-    marginTop: 4,
   },
   sectionAction: {
     width: 40,

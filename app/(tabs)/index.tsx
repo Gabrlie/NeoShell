@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 
 import { ServerCard } from '@/components/monitor/ServerCard';
+import { ContextMenu, type MenuAnchor } from '@/components/ui/ContextMenu';
 import { Card } from '@/components/ui/Card';
 import { useServerMonitoring } from '@/hooks/useServerMonitoring';
 import { useTheme } from '@/hooks/useTheme';
@@ -40,6 +41,8 @@ export default function HomeScreen() {
   const hydrateServers = useServerStore((state) => state.hydrateServers);
   const searchQuery = useServerStore((state) => state.searchQuery);
   const setSearchQuery = useServerStore((state) => state.setSearchQuery);
+  const [activeMenuServerId, setActiveMenuServerId] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
   const openServerGuardRef = useRef(createNavigationGuard());
 
   useEffect(() => {
@@ -124,10 +127,53 @@ export default function HomeScreen() {
                   router.push(`/server/${server.id}/monitor`);
                 })
               }
+              onLongPress={(event) => {
+                setActiveMenuServerId(server.id);
+                setMenuAnchor({
+                  x: event.nativeEvent.pageX,
+                  y: event.nativeEvent.pageY,
+                  width: 0,
+                  height: 0,
+                });
+              }}
             />
           ))
         )}
       </ScrollView>
+
+      <ContextMenu
+        visible={Boolean(activeMenuServerId)}
+        anchor={menuAnchor}
+        onClose={() => setActiveMenuServerId(null)}
+        items={[
+          {
+            key: 'test',
+            icon: 'pulse-outline',
+            label: '测试',
+            onPress: () => {},
+          },
+          {
+            key: 'edit',
+            icon: 'create-outline',
+            label: '编辑',
+            onPress: () => {},
+          },
+          {
+            key: 'poweroff',
+            icon: 'power-outline',
+            label: '关机',
+            destructive: true,
+            onPress: () => {},
+          },
+          {
+            key: 'restart',
+            icon: 'refresh-circle-outline',
+            label: '重启',
+            destructive: true,
+            onPress: () => {},
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -137,11 +183,13 @@ function ServerMonitorListItem({
   refreshToken,
   enabled,
   onOpenMonitor,
+  onLongPress,
 }: {
   server: ServerConfig;
   refreshToken: number;
   enabled: boolean;
   onOpenMonitor: () => boolean;
+  onLongPress: (event: any) => void;
 }) {
   const snapshot = useMonitorStore((state) => state.snapshots[server.id]);
   const systemInfo = useMonitorStore((state) => state.systemInfos[server.id]);
@@ -167,6 +215,7 @@ function ServerMonitorListItem({
     <ServerCard
       data={cardData}
       onPress={canOpenMonitor ? () => void onOpenMonitor() : undefined}
+      onLongPress={onLongPress}
     />
   );
 }

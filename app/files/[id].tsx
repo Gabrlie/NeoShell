@@ -13,7 +13,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FileActionMenu } from '@/components/files/FileActionMenu';
+import { ContextMenu, type MenuAnchor } from '@/components/ui/ContextMenu';
 import { FileConfirmDialog } from '@/components/files/FileConfirmDialog';
 import { FileListItem } from '@/components/files/FileListItem';
 import { FileNameDialog } from '@/components/files/FileNameDialog';
@@ -105,7 +105,7 @@ export default function FileBrowserScreen() {
   const [dialogState, setDialogState] = useState<FileDialogState | null>(null);
   const [deleteConfirmState, setDeleteConfirmState] = useState<FileDeleteConfirmState | null>(null);
   const [activeActionEntry, setActiveActionEntry] = useState<FileEntry | null>(null);
-  const [actionMenuAnchor, setActionMenuAnchor] = useState<FileActionMenuAnchor | null>(null);
+  const [actionMenuAnchor, setActionMenuAnchor] = useState<MenuAnchor | null>(null);
   const bypassNextRemoveRef = useRef(false);
   const previousPathRef = useRef<string | undefined>(undefined);
 
@@ -299,7 +299,7 @@ export default function FileBrowserScreen() {
     openFileEntry(entry);
   };
 
-  const handleLongPressEntry = (entry: FileEntry, anchor: FileActionMenuAnchor) => {
+  const handleLongPressEntry = (entry: FileEntry, anchor: MenuAnchor) => {
     if (isMutating || entry.isParentLink) {
       return;
     }
@@ -640,7 +640,7 @@ export default function FileBrowserScreen() {
           void handleSubmitDialog(value);
         }}
       />
-      <FileActionMenu
+      <ContextMenu
         visible={Boolean(activeActionEntry)}
         title={activeActionEntry?.name ?? ''}
         anchor={actionMenuAnchor}
@@ -1049,6 +1049,8 @@ export default function FileBrowserScreen() {
                 handleLongPressEntry(item, {
                   x: event.nativeEvent.pageX,
                   y: event.nativeEvent.pageY,
+                  width: 0,
+                  height: 0,
                 })
               }
             />

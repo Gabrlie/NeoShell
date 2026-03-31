@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks';
 import { Typography, Spacing } from '@/theme';
@@ -11,7 +12,7 @@ import { RingChart } from './RingChart';
 interface ServerCardProps {
   data: ServerCardData;
   onPress?: () => void;
-  onLongPress?: () => void;
+  onLongPress?: (event: GestureResponderEvent) => void;
 }
 
 export function ServerCard({ data, onPress, onLongPress }: ServerCardProps) {

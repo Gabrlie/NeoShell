@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, G, Line, Polyline } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Stop, Path, Line, G } from 'react-native-svg';
 
 import { useTheme } from '@/hooks';
 import { BorderRadius, Spacing, Typography } from '@/theme';
@@ -45,6 +45,19 @@ interface LineChartProps {
   summary?: SummaryItem[];
 }
 
+// 辅助函数：根据坐标点生成平滑的 Bezier 曲线路径
+function getSmoothLinePath(points: {x: number, y: number}[]) {
+  if (points.length === 0) return '';
+  let d = `M ${points[0].x},${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const midX = (p0.x + p1.x) / 2;
+    d += ` C ${midX},${p0.y} ${midX},${p1.y} ${p1.x},${p1.y}`;
+  }
+  return d;
+}
+
 export function LineChart({
   title,
   series,
@@ -55,7 +68,7 @@ export function LineChart({
 }: LineChartProps) {
   const { colors } = useTheme();
   const [plotAreaWidth, setPlotAreaWidth] = useState(0);
-  const transition = useRef(new Animated.Value(1)).current;
+  const transition = useRef(new Animated.Value(0)).current;
 
   const visibleSeries = useMemo(
     () => series.map((item) => ({
@@ -102,7 +115,7 @@ export function LineChart({
     transition.setValue(0);
     Animated.timing(transition, {
       toValue: 1,
-      duration: 220,
+      duration: 300,
       useNativeDriver: true,
     }).start();
   }, [dataSignature, transition]);
@@ -110,20 +123,20 @@ export function LineChart({
   const animatedStyle = {
     opacity: transition.interpolate({
       inputRange: [0, 1],
-      outputRange: [0.72, 1],
+      outputRange: [0.6, 1],
     }),
     transform: [
       {
-        translateX: transition.interpolate({
+        translateY: transition.interpolate({
           inputRange: [0, 1],
-          outputRange: [10, 0],
+          outputRange: [6, 0],
         }),
       },
     ],
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.cardElevated, borderColor: colors.border }]}>
+    <View style={[styles.container, { backgroundColor: colors.cardElevated, borderColor: colors.borderLight }]}>
       <View style={styles.titleRow}>
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         <Text style={[styles.unitText, { color: colors.textTertiary }]}>{unitLabel}</Text>
@@ -153,8 +166,9 @@ export function LineChart({
         </View>
 
         <View style={styles.plotArea} onLayout={handleLayout}>
-          <Animated.View style={animatedStyle}>
+          <Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
             <Svg width={innerWidth} height={height}>
+              {/* 背景虚线与辅助格子 */}
               {yAxisTicks.map((tick) => (
                 <Line
                   key={`grid-${tick.value}`}
@@ -164,34 +178,46 @@ export function LineChart({
                   y2={getY(tick.value)}
                   stroke={colors.border}
                   strokeWidth={1}
-                  opacity={0.5}
+                  strokeDasharray="4, 4"
+                  opacity={0.3}
                 />
               ))}
 
               {visibleSeries.map((item) => {
-                const points = item.points.map((point, index) => `${getX(index)},${getY(point.value)}`).join(' ');
+                const mappedPoints = item.points.map((p, i) => ({ x: getX(i), y: getY(p.value) }));
+                if (mappedPoints.length === 0) return null;
+
+                const linePath = getSmoothLinePath(mappedPoints);
+                const areaPath = mappedPoints.length > 1 
+                  ? `${linePath} L ${mappedPoints[mappedPoints.length - 1].x},${height} L ${mappedPoints[0].x},${height} Z`
+                  : '';
+                const gradientId = `grad-${item.key}`;
+
                 return (
                   <G key={item.key}>
-                    {item.points.length > 1 ? (
-                      <Polyline
-                        points={points}
+                    <Defs>
+                      <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0%" stopColor={item.color} stopOpacity={0.35} />
+                        <Stop offset="100%" stopColor={item.color} stopOpacity={0.0} />
+                      </LinearGradient>
+                    </Defs>
+                    
+                    {/* 面状填充 */}
+                    {areaPath ? (
+                      <Path d={areaPath} fill={`url(#${gradientId})`} />
+                    ) : null}
+                    
+                    {/* 平滑加粗线条 */}
+                    {linePath ? (
+                      <Path
+                        d={linePath}
                         fill="none"
                         stroke={item.color}
-                        strokeWidth={2.5}
+                        strokeWidth={3}
                         strokeLinejoin="round"
                         strokeLinecap="round"
                       />
                     ) : null}
-
-                    {item.points.map((point, index) => (
-                      <Circle
-                        key={`${item.key}-${index}`}
-                        cx={getX(index)}
-                        cy={getY(point.value)}
-                        r={3}
-                        fill={item.color}
-                      />
-                    ))}
                   </G>
                 );
               })}
@@ -226,7 +252,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Typography.bodySmall,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   titleRow: {
     flexDirection: 'row',
