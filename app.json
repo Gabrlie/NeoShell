@@ -33,7 +33,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "允许 NeoShell 使用面容识别来解锁应用和验证敏感操作。"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

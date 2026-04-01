@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,11 +20,13 @@ import { router } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 
 import { ServerCard } from '@/components/monitor/ServerCard';
-import { ContextMenu, type MenuAnchor } from '@/components/ui/ContextMenu';
+import { ContextMenu, type ContextMenuItem, type MenuAnchor } from '@/components/ui/ContextMenu';
 import { Card } from '@/components/ui/Card';
+import { useSensitiveActionAccess } from '@/hooks/useSensitiveActionAccess';
 import { useServerMonitoring } from '@/hooks/useServerMonitoring';
 import { useTheme } from '@/hooks/useTheme';
 import { toServerCardData } from '@/services/monitorMappers';
+import { disconnectServer, runServerPowerAction, testSSHConnection } from '@/services';
 import { useMonitorStore } from '@/stores/monitorStore';
 import { useServerStore } from '@/stores/serverStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
@@ -39,8 +42,11 @@ export default function HomeScreen() {
   const isHydrated = useServerStore((state) => state.isHydrated);
   const isHydrating = useServerStore((state) => state.isHydrating);
   const hydrateServers = useServerStore((state) => state.hydrateServers);
+  const removeServer = useServerStore((state) => state.removeServer);
+  const setConnectionStatus = useServerStore((state) => state.setConnectionStatus);
   const searchQuery = useServerStore((state) => state.searchQuery);
   const setSearchQuery = useServerStore((state) => state.setSearchQuery);
+  const { requireAccess } = useSensitiveActionAccess();
   const [activeMenuServerId, setActiveMenuServerId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
   const openServerGuardRef = useRef(createNavigationGuard());
@@ -81,6 +87,170 @@ export default function HomeScreen() {
     setRefreshToken((value) => value + 1);
     setTimeout(() => setRefreshing(false), 800);
   }, []);
+
+  const activeServer = activeMenuServerId
+    ? servers.find((s) => s.id === activeMenuServerId)
+    : null;
+
+  const handleTestConnection = async (server: ServerConfig) => {
+    if (server.dataSource !== 'ssh') {
+      Alert.alert('提示', '演示服务器不支持连接测试。');
+      return;
+    }
+
+    try {
+      const result = await testSSHConnection(server);
+      Alert.alert('测试成功', result.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      Alert.alert('测试失败', message);
+    }
+  };
+
+  const handleEditServer = (server: ServerConfig) => {
+    router.push({ pathname: '/modal', params: { editId: server.id } });
+  };
+
+  const handleDeleteServer = async (server: ServerConfig) => {
+    const granted = await requireAccess({
+      title: '验证后继续删除服务器',
+      description: '删除服务器前，请先完成身份验证。',
+    });
+    if (!granted) {
+      return;
+    }
+
+    Alert.alert(
+      '删除服务器',
+      `确认删除「${server.name}」吗？此操作不可撤销，关联的密码也会一并清除。`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '删除',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await disconnectServer(server.id);
+              useMonitorStore.getState().clearServerData(server.id);
+              await removeServer(server.id);
+            } catch {
+              Alert.alert('删除失败', '请稍后重试。');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePowerAction = (server: ServerConfig, action: 'restart' | 'shutdown') => {
+    if (server.dataSource !== 'ssh') {
+      Alert.alert('提示', '演示服务器不支持电源操作。');
+      return;
+    }
+
+    const actionLabel = action === 'restart' ? '重启' : '关机';
+    const title = action === 'restart' ? '重启服务器' : '关闭服务器';
+
+    Alert.alert(
+      title,
+      `确认对「${server.name}」执行${actionLabel}吗？执行后当前 SSH 会话会被断开。`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: actionLabel,
+          style: action === 'shutdown' ? 'destructive' : 'default',
+          onPress: async () => {
+            try {
+              const result = await runServerPowerAction(server, action);
+              useMonitorStore.getState().clearServerData(server.id);
+              setConnectionStatus(server.id, 'disconnected');
+              Alert.alert(`${actionLabel}命令已发送`, result.message);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : '未知错误';
+              Alert.alert(`${actionLabel}失败`, message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const buildMenuItems = (server: ServerConfig): ContextMenuItem[] => {
+    const isSSH = server.dataSource === 'ssh';
+
+    const items: ContextMenuItem[] = [
+      {
+        key: 'terminal',
+        icon: 'terminal-outline',
+        label: '终端',
+        disabled: !isSSH,
+        onPress: () => {
+          openServerGuardRef.current.run(() => {
+            router.push(`/terminal/${server.id}`);
+          });
+        },
+      },
+      {
+        key: 'files',
+        icon: 'folder-outline',
+        label: '文件管理',
+        disabled: !isSSH,
+        onPress: () => {
+          openServerGuardRef.current.run(() => {
+            router.push(`/files/${server.id}`);
+          });
+        },
+      },
+      {
+        key: 'docker',
+        icon: 'cube-outline',
+        label: 'Docker',
+        disabled: !isSSH,
+        onPress: () => {
+          openServerGuardRef.current.run(() => {
+            router.push(`/docker/${server.id}`);
+          });
+        },
+      },
+      {
+        key: 'test',
+        icon: 'pulse-outline',
+        label: '测试连接',
+        disabled: !isSSH,
+        onPress: () => void handleTestConnection(server),
+      },
+      {
+        key: 'restart',
+        icon: 'refresh-outline',
+        label: '重启',
+        disabled: !isSSH,
+        onPress: () => handlePowerAction(server, 'restart'),
+      },
+      {
+        key: 'shutdown',
+        icon: 'power-outline',
+        label: '关机',
+        destructive: true,
+        disabled: !isSSH,
+        onPress: () => handlePowerAction(server, 'shutdown'),
+      },
+      {
+        key: 'edit',
+        icon: 'create-outline',
+        label: '编辑',
+        onPress: () => handleEditServer(server),
+      },
+      {
+        key: 'delete',
+        icon: 'trash-outline',
+        label: '删除',
+        destructive: true,
+        onPress: () => void handleDeleteServer(server),
+      },
+    ];
+
+    return items;
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -145,34 +315,8 @@ export default function HomeScreen() {
         visible={Boolean(activeMenuServerId)}
         anchor={menuAnchor}
         onClose={() => setActiveMenuServerId(null)}
-        items={[
-          {
-            key: 'test',
-            icon: 'pulse-outline',
-            label: '测试',
-            onPress: () => {},
-          },
-          {
-            key: 'edit',
-            icon: 'create-outline',
-            label: '编辑',
-            onPress: () => {},
-          },
-          {
-            key: 'poweroff',
-            icon: 'power-outline',
-            label: '关机',
-            destructive: true,
-            onPress: () => {},
-          },
-          {
-            key: 'restart',
-            icon: 'refresh-circle-outline',
-            label: '重启',
-            destructive: true,
-            onPress: () => {},
-          },
-        ]}
+        title={activeServer?.name}
+        items={activeServer ? buildMenuItems(activeServer) : []}
       />
     </View>
   );

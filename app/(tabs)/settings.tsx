@@ -5,6 +5,7 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 
 import { useTheme } from '@/hooks/useTheme';
 import { Spacing, Typography, BorderRadius } from '@/theme';
@@ -21,33 +22,35 @@ interface SettingGroup {
   items: SettingItem[];
 }
 
+const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+
 const SETTING_GROUPS: SettingGroup[] = [
   {
     title: '管理',
     items: [
-      { icon: 'server-outline', label: '服务器管理', description: '管理已保存的服务器' },
+      { icon: 'server-outline', label: '服务器管理', description: '管理已保存的服务器', route: '/settings/servers' },
       { icon: 'key-outline', label: '私钥库', description: '管理可复用的 SSH 私钥', route: '/settings/private-keys' },
     ],
   },
   {
     title: '偏好',
     items: [
-      { icon: 'color-palette-outline', label: '外观', description: '主题、字体' },
-      { icon: 'link-outline', label: '连接', description: '刷新间隔、超时' },
-      { icon: 'notifications-outline', label: '通知', description: '资源告警' },
+      { icon: 'color-palette-outline', label: '外观', description: '主题、终端字体', route: '/settings/appearance' },
+      { icon: 'link-outline', label: '连接', description: '刷新间隔、超时', route: '/settings/connection' },
+      { icon: 'notifications-outline', label: '通知', description: '资源告警', route: '/settings/notification' },
     ],
   },
   {
     title: '安全',
     items: [
-      { icon: 'lock-closed-outline', label: '安全', description: '应用锁、生物识别' },
+      { icon: 'lock-closed-outline', label: '安全', description: '应用锁、生物识别', route: '/settings/security' },
     ],
   },
   {
     title: '其他',
     items: [
-      { icon: 'cloud-outline', label: '数据管理', description: '导入导出、命令片段库' },
-      { icon: 'information-circle-outline', label: '关于', description: 'NeoShell v1.0.0' },
+      { icon: 'cloud-outline', label: '数据管理', description: '清除缓存', route: '/settings/data' },
+      { icon: 'information-circle-outline', label: '关于', description: `NeoShell v${APP_VERSION}`, route: '/settings/about' },
     ],
   },
 ];

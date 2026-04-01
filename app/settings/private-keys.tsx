@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 
 import { Card, Badge } from '@/components/ui';
 import { useTheme } from '@/hooks';
+import { useSensitiveActionAccess } from '@/hooks/useSensitiveActionAccess';
 import { usePrivateKeyStore, useServerStore } from '@/stores';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 
@@ -17,6 +18,7 @@ export default function PrivateKeysScreen() {
   const servers = useServerStore((state) => state.servers);
   const areServersHydrated = useServerStore((state) => state.isHydrated);
   const hydrateServers = useServerStore((state) => state.hydrateServers);
+  const { requireAccess } = useSensitiveActionAccess();
 
   useEffect(() => {
     if (!isHydrated) {
@@ -30,7 +32,7 @@ export default function PrivateKeysScreen() {
     }
   }, [areServersHydrated, hydrateServers]);
 
-  const handleDelete = (keyId: string) => {
+  const handleDelete = async (keyId: string) => {
     if (!areServersHydrated) {
       Alert.alert('引用关系加载中', '正在读取服务器列表，请稍后再试。');
       return;
@@ -48,6 +50,14 @@ export default function PrivateKeysScreen() {
         '无法删除私钥',
         `以下服务器仍在使用该私钥：${referencedBy.map((server) => server.name).join('、')}`
       );
+      return;
+    }
+
+    const granted = await requireAccess({
+      title: '验证后继续删除私钥',
+      description: '删除私钥前，请先完成身份验证。',
+    });
+    if (!granted) {
       return;
     }
 
@@ -104,9 +114,14 @@ export default function PrivateKeysScreen() {
                     <Text style={[styles.keyName, { color: colors.text }]}>{item.name}</Text>
                     <Text style={[styles.keySummary, { color: colors.textSecondary }]}>{item.summary}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                  </TouchableOpacity>
+                  <View style={styles.keyActions}>
+                    <TouchableOpacity onPress={() => router.push(`/settings/private-keys/${item.id}` as never)}>
+                      <Ionicons name="create-outline" size={18} color={colors.accent} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => void handleDelete(item.id)}>
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.keyMetaRow}>
@@ -181,6 +196,11 @@ const styles = StyleSheet.create({
   },
   keyTitleBlock: {
     flex: 1,
+  },
+  keyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
   keyName: {
     ...Typography.body,

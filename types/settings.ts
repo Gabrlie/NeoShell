@@ -29,8 +29,9 @@ export interface AppSettings {
   offlineAlert: boolean;
 
   // 安全
-  appLockEnabled: boolean;
-  biometricEnabled: boolean;
+  launchProtectionEnabled: boolean;
+  sensitiveActionProtectionEnabled: boolean;
+  biometricPreferredEnabled: boolean;
   sessionTimeout: number;
 }
 
@@ -51,8 +52,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   diskThreshold: 85,
   offlineAlert: true,
 
-  appLockEnabled: false,
-  biometricEnabled: false,
+  launchProtectionEnabled: false,
+  sensitiveActionProtectionEnabled: false,
+  biometricPreferredEnabled: false,
   sessionTimeout: 300,
 };
 

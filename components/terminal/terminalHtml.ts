@@ -63,7 +63,8 @@ export function buildTerminalHtml(theme: {
         function initTerminal() {
           var terminalRoot = document.getElementById('terminal');
           var term = new window.Terminal({
-            convertEol: true,
+            // Keep logical soft wraps intact so backspace can traverse wrapped command lines.
+            convertEol: false,
             cursorBlink: true,
             fontFamily: 'Menlo, Consolas, monospace',
             fontSize: 14,
@@ -111,9 +112,57 @@ export function buildTerminalHtml(theme: {
             focus: function () {
               focusTerminal();
             },
+            getPlainText: function () {
+              var buffer = term.buffer.active;
+              var lines = [];
+              for (var i = 0; i < buffer.length; i++) {
+                var line = buffer.getLine(i);
+                if (line) {
+                  lines.push(line.translateToString(true));
+                }
+              }
+              // Trim trailing empty lines
+              while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+                lines.pop();
+              }
+              return lines.join('\\n');
+            },
+            paste: function (text) {
+              term.paste(text);
+            },
           };
 
           post('ready');
+
+          // Long-press detection for paste/copy context menu
+          var longPressTimer = null;
+          terminalRoot.addEventListener('touchstart', function (e) {
+            var touch = e.touches[0];
+            var startX = touch.pageX;
+            var startY = touch.pageY;
+            longPressTimer = setTimeout(function () {
+              longPressTimer = null;
+              post('longpress', JSON.stringify({ x: startX, y: startY }));
+            }, 500);
+          }, { passive: true });
+          terminalRoot.addEventListener('touchmove', function () {
+            if (longPressTimer) {
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+            }
+          }, { passive: true });
+          terminalRoot.addEventListener('touchend', function () {
+            if (longPressTimer) {
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+            }
+          }, { passive: true });
+          terminalRoot.addEventListener('touchcancel', function () {
+            if (longPressTimer) {
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+            }
+          }, { passive: true });
         }
 
         if (window.Terminal && window.FitAddon) {

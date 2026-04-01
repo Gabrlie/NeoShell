@@ -5,7 +5,9 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   type KeyboardEvent,
+  Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,6 +15,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TerminalShortcutBar, TerminalWebView, type TerminalWebViewRef } from '@/components/terminal';
@@ -70,6 +73,10 @@ export default function TerminalSessionScreen() {
   const [shortcutBarHeight, setShortcutBarHeight] = useState(0);
   const [sendError, setSendError] = useState<string>();
   const [terminalSurfaceVersion, setTerminalSurfaceVersion] = useState(0);
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [showPlainTextModal, setShowPlainTextModal] = useState(false);
+  const [plainText, setPlainText] = useState('');
   const contentContainerMode = getTerminalContentContainerMode(Platform.OS);
   const shortcutBarBottomInset = getTerminalShortcutBarBottomInset(insets.bottom, isKeyboardVisible);
   const shortcutBarOffset = getTerminalShortcutBarOffset(keyboardHeight, insets.bottom, isKeyboardVisible);
@@ -267,6 +274,33 @@ export default function TerminalSessionScreen() {
     requestTerminalFit();
   }, [requestTerminalFit]);
 
+  const handleLongPress = useCallback((position: { x: number; y: number }) => {
+    setContextMenuPos(position);
+    setShowContextMenu(true);
+  }, []);
+
+  const handlePaste = useCallback(async () => {
+    setShowContextMenu(false);
+    try {
+      const text = await Clipboard.getStringAsync();
+      if (text) {
+        terminalRef.current?.paste(text);
+      }
+    } catch {
+      // clipboard not available
+    }
+  }, []);
+
+  const handleCopyRequest = useCallback(() => {
+    setShowContextMenu(false);
+    terminalRef.current?.requestPlainText();
+  }, []);
+
+  const handlePlainText = useCallback((text: string) => {
+    setPlainText(text);
+    setShowPlainTextModal(true);
+  }, []);
+
   const contentProps =
     contentContainerMode === 'keyboard-avoiding'
       ? {
@@ -369,6 +403,8 @@ export default function TerminalSessionScreen() {
               }}
               onReady={handleReady}
               onFocusRequest={() => terminalRef.current?.focus()}
+              onPlainText={handlePlainText}
+              onLongPress={handleLongPress}
               unavailableMessage="当前安装包未包含 WebView 原生模块，请重新安装最新开发包。"
             />
 
@@ -434,6 +470,67 @@ export default function TerminalSessionScreen() {
           />
         </View>
       </ContentContainer>
+
+      {/* Long-press context menu */}
+      {showContextMenu && (
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.menuBackdrop}
+          onPress={() => setShowContextMenu(false)}
+        >
+          <View
+            style={[
+              styles.contextMenu,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                top: Math.min(contextMenuPos.y, Dimensions.get('window').height - 120),
+                left: Math.min(Math.max(contextMenuPos.x - 72, 8), Dimensions.get('window').width - 152),
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={[styles.contextMenuItem, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+              onPress={() => void handlePaste()}
+            >
+              <Ionicons name="clipboard-outline" size={18} color={colors.accent} />
+              <Text style={[styles.contextMenuText, { color: colors.text }]}>粘贴</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.contextMenuItem}
+              onPress={handleCopyRequest}
+            >
+              <Ionicons name="copy-outline" size={18} color={colors.accent} />
+              <Text style={[styles.contextMenuText, { color: colors.text }]}>复制终端内容</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Plain text modal for copy */}
+      <Modal
+        visible={showPlainTextModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPlainTextModal(false)}
+      >
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>终端内容</Text>
+            <TouchableOpacity onPress={() => setShowPlainTextModal(false)}>
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.modalHint, { color: colors.textSecondary }]}>
+            长按选择文字，然后使用系统菜单复制。
+          </Text>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+            <Text selectable style={[styles.plainTextContent, { color: colors.text }]}>
+              {plainText}
+            </Text>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -552,5 +649,61 @@ const styles = StyleSheet.create({
     ...Typography.body,
     marginTop: Spacing.sm,
     textAlign: 'center',
+  },
+  menuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+  },
+  contextMenu: {
+    position: 'absolute',
+    width: 160,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  contextMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
+  },
+  contextMenuText: {
+    ...Typography.body,
+  },
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  modalTitle: {
+    ...Typography.h3,
+  },
+  modalHint: {
+    ...Typography.caption,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    padding: Spacing.lg,
+  },
+  plainTextContent: {
+    fontFamily: 'monospace',
+    fontSize: 13,
+    lineHeight: 20,
   },
 });

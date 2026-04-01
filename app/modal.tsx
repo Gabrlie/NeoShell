@@ -10,11 +10,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { Card, Badge } from '@/components/ui';
 import { useTheme } from '@/hooks';
-import { createServerWithCredentials, saveServerPassword, deleteServerPassword, testSSHConnection } from '@/services';
+import { useSensitiveRouteGuard } from '@/hooks/useSensitiveRouteGuard';
+import {
+  createServerWithCredentials,
+  deleteServerPassword,
+  saveServerPassword,
+  testSSHConnection,
+  updateServerWithCredentials,
+} from '@/services';
 import { usePrivateKeyStore, useServerStore } from '@/stores';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 import type { AuthMethod, ServerConfig, ServerDataSource } from '@/types';
@@ -22,23 +30,36 @@ import { DEFAULT_SSH_PORT } from '@/utils';
 
 export default function ModalScreen() {
   const { colors } = useTheme();
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const isEditing = Boolean(editId);
+  const servers = useServerStore((state) => state.servers);
   const addServer = useServerStore((state) => state.addServer);
+  const updateServer = useServerStore((state) => state.updateServer);
   const hydrateKeys = usePrivateKeyStore((state) => state.hydrateKeys);
   const keyStoreHydrated = usePrivateKeyStore((state) => state.isHydrated);
   const privateKeys = usePrivateKeyStore((state) => state.keys);
 
-  const [name, setName] = useState('');
-  const [host, setHost] = useState('');
-  const [port, setPort] = useState(String(DEFAULT_SSH_PORT));
-  const [username, setUsername] = useState('root');
-  const [group, setGroup] = useState('');
+  // 编辑模式下找到目标服务器
+  const editingServer = isEditing ? servers.find((s) => s.id === editId) : undefined;
+
+  const [name, setName] = useState(editingServer?.name ?? '');
+  const [host, setHost] = useState(editingServer?.host ?? '');
+  const [port, setPort] = useState(String(editingServer?.port ?? DEFAULT_SSH_PORT));
+  const [username, setUsername] = useState(editingServer?.username ?? 'root');
+  const [group, setGroup] = useState(editingServer?.group ?? '');
   const [password, setPassword] = useState('');
-  const [dataSource, setDataSource] = useState<ServerDataSource>('mock');
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('password');
-  const [selectedPrivateKeyId, setSelectedPrivateKeyId] = useState<string | undefined>();
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [dataSource, setDataSource] = useState<ServerDataSource>(editingServer?.dataSource ?? 'mock');
+  const [authMethod, setAuthMethod] = useState<AuthMethod>(editingServer?.authMethod ?? 'password');
+  const [selectedPrivateKeyId, setSelectedPrivateKeyId] = useState<string | undefined>(editingServer?.privateKeyId);
   const [submitting, setSubmitting] = useState(false);
   const [testing, setTesting] = useState(false);
   const isSSH = dataSource === 'ssh';
+
+  useSensitiveRouteGuard(
+    isEditing ? '验证后继续编辑服务器' : '验证后继续新增服务器',
+    '进入服务器配置页前，请先完成身份验证。'
+  );
 
   useEffect(() => {
     if (!keyStoreHydrated) {
@@ -88,7 +109,13 @@ export default function ModalScreen() {
       return null;
     }
 
-    if (isSSH && authMethod === 'password' && !password) {
+    const needsPasswordForEdit =
+      !isEditing ||
+      !editingServer ||
+      editingServer.dataSource !== 'ssh' ||
+      editingServer.authMethod !== 'password';
+
+    if (isSSH && authMethod === 'password' && needsPasswordForEdit && !password.trim()) {
       Alert.alert('密码未填写', '请选择密码认证时，必须填写 SSH 密码。');
       return null;
     }
@@ -149,13 +176,31 @@ export default function ModalScreen() {
 
     try {
       setSubmitting(true);
-      await createServerWithCredentials({
-        draft,
-        password,
-        addServer,
-        savePassword: saveServerPassword,
-        deletePassword: deleteServerPassword,
-      });
+
+      if (isEditing && editId) {
+        if (!editingServer) {
+          throw new Error('未找到要编辑的服务器，请返回列表后重试。');
+        }
+
+        await updateServerWithCredentials({
+          serverId: editId,
+          currentServer: editingServer,
+          draft,
+          password,
+          updateServer,
+          savePassword: saveServerPassword,
+          deletePassword: deleteServerPassword,
+        });
+      } else {
+        // 新增模式
+        await createServerWithCredentials({
+          draft,
+          password,
+          addServer,
+          savePassword: saveServerPassword,
+          deletePassword: deleteServerPassword,
+        });
+      }
 
       router.back();
     } catch (error) {
@@ -172,7 +217,7 @@ export default function ModalScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.title, { color: colors.text }]}>新增服务器</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{isEditing ? '编辑服务器' : '新增服务器'}</Text>
         <Text style={[styles.desc, { color: colors.textSecondary }]}>
           支持演示模式和真实 SSH。真实 SSH 下可选密码认证或私钥认证，私钥从独立私钥库复用。
         </Text>
@@ -237,13 +282,38 @@ export default function ModalScreen() {
           />
 
           {isSSH && authMethod === 'password' ? (
-            <Field
-              label="SSH 密码"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="输入 SSH 密码"
-              secureTextEntry
-            />
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.text }]}>SSH 密码</Text>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.inputWithAccessory,
+                    {
+                      color: colors.text,
+                      backgroundColor: colors.backgroundSecondary,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  placeholder="输入 SSH 密码"
+                  placeholderTextColor={colors.textTertiary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!passwordVisible}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={styles.inputAccessory}
+                  onPress={() => setPasswordVisible((current) => !current)}
+                >
+                  <Ionicons
+                    name={passwordVisible ? 'eye-off-outline' : 'eye-outline'}
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
           ) : null}
 
           {isSSH && authMethod === 'key' ? (
@@ -330,7 +400,7 @@ export default function ModalScreen() {
           disabled={submitting}
         >
           <Text style={[styles.submitText, { color: colors.accentText }]}>
-            {submitting ? '保存中...' : isSSH ? '保存 SSH 服务器' : '创建演示服务器'}
+            {submitting ? '保存中...' : isEditing ? '保存修改' : isSSH ? '保存 SSH 服务器' : '创建演示服务器'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -447,6 +517,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
+  },
+  inputRow: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  inputWithAccessory: {
+    paddingRight: 44,
+  },
+  inputAccessory: {
+    position: 'absolute',
+    right: Spacing.md,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   selectionRow: {
     flexDirection: 'row',

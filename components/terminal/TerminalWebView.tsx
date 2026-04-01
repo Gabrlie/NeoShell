@@ -8,7 +8,7 @@ import { BorderRadius, Spacing, Typography } from '@/theme';
 import { buildTerminalHtml } from './terminalHtml';
 
 interface TerminalMessage {
-  type: 'ready' | 'input' | 'focus';
+  type: 'ready' | 'input' | 'focus' | 'plainText' | 'longpress';
   payload?: string;
 }
 
@@ -22,6 +22,8 @@ interface TerminalWebViewProps {
   onInput: (data: string) => void;
   onReady: () => void;
   onFocusRequest: () => void;
+  onPlainText?: (text: string) => void;
+  onLongPress?: (position: { x: number; y: number }) => void;
   unavailableMessage?: string;
 }
 
@@ -31,10 +33,12 @@ export interface TerminalWebViewRef {
   reset: () => void;
   fit: () => void;
   focus: () => void;
+  paste: (text: string) => void;
+  requestPlainText: () => void;
 }
 
 export const TerminalWebView = forwardRef<TerminalWebViewRef, TerminalWebViewProps>(
-  function TerminalWebView({ onInput, onReady, onFocusRequest, unavailableMessage }, ref) {
+  function TerminalWebView({ onInput, onReady, onFocusRequest, onPlainText, onLongPress, unavailableMessage }, ref) {
     const { colors, isDark } = useTheme();
     const webViewRef = useRef<{ injectJavaScript?: (script: string) => void } | null>(null);
     const webViewModule = useMemo(() => resolveTerminalWebViewModule(), []);
@@ -70,6 +74,17 @@ export const TerminalWebView = forwardRef<TerminalWebViewRef, TerminalWebViewPro
       focus: () => {
         inject('window.NeoShellTerminal && window.NeoShellTerminal.focus();');
       },
+      paste: (text: string) => {
+        inject(`window.NeoShellTerminal && window.NeoShellTerminal.paste(${JSON.stringify(text)});`);
+      },
+      requestPlainText: () => {
+        inject(`
+          if (window.NeoShellTerminal) {
+            var text = window.NeoShellTerminal.getPlainText();
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'plainText', payload: text }));
+          }
+        `);
+      },
     }));
 
     const handleMessage = (event: WebViewMessageEventLike) => {
@@ -88,6 +103,19 @@ export const TerminalWebView = forwardRef<TerminalWebViewRef, TerminalWebViewPro
 
         if (message.type === 'focus') {
           onFocusRequest();
+        }
+
+        if (message.type === 'plainText' && message.payload != null) {
+          onPlainText?.(message.payload);
+        }
+
+        if (message.type === 'longpress' && message.payload) {
+          try {
+            const pos = JSON.parse(message.payload) as { x: number; y: number };
+            onLongPress?.(pos);
+          } catch {
+            // ignore
+          }
         }
       } catch {
         // Ignore malformed bridge messages so a single bad event does not break the terminal.

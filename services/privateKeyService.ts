@@ -1,5 +1,10 @@
 import type { PrivateKeyAlgorithm, PrivateKeyMetadata, PrivateKeySecret } from '@/types';
-import { deletePrivateKeySecret, loadPrivateKeySecret, savePrivateKeySecret } from './credential/privateKeyVault';
+import {
+  deletePrivateKeySecret,
+  deletePrivateKeySecretChunksFrom,
+  loadPrivateKeySecret,
+  savePrivateKeySecret,
+} from './credential/privateKeyVault';
 import { loadPrivateKeyMetadata, savePrivateKeyMetadata } from './privateKeyMetadataStorage';
 
 function generateId(): string {
@@ -59,6 +64,44 @@ export async function createPrivateKeyEntry(input: {
 
   await savePrivateKeyMetadata([entry, ...existing]);
   return entry;
+}
+
+export async function updatePrivateKeyEntry(input: {
+  id: string;
+  name: string;
+  privateKey: string;
+  passphrase?: string;
+}): Promise<PrivateKeyMetadata> {
+  const existing = await loadPrivateKeyMetadata();
+  const current = existing.find((item) => item.id === input.id);
+
+  if (!current) {
+    throw new Error('未找到要更新的私钥。');
+  }
+
+  const nextChunkCount = await savePrivateKeySecret(input.id, {
+    privateKey: input.privateKey,
+    passphrase: input.passphrase,
+  });
+
+  await deletePrivateKeySecretChunksFrom(input.id, nextChunkCount, current.chunkCount);
+
+  const updatedEntry: PrivateKeyMetadata = {
+    ...current,
+    name: input.name,
+    algorithm: inferPrivateKeyAlgorithm(input.privateKey),
+    summary: createPrivateKeySummary(input.privateKey),
+    hasPassphrase: Boolean(input.passphrase),
+    chunkCount: nextChunkCount,
+    updatedAt: Date.now(),
+  };
+
+  await savePrivateKeyMetadata([
+    updatedEntry,
+    ...existing.filter((item) => item.id !== input.id),
+  ]);
+
+  return updatedEntry;
 }
 
 export async function deletePrivateKeyEntry(entry: PrivateKeyMetadata): Promise<void> {

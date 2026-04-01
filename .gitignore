@@ -42,3 +42,7 @@ yarn-error.*
 
 # local AI debugging artifacts
 .ai/logs/
+
+# local-only project docs
+.ai/
+AGENTS.md

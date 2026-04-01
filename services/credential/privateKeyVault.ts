@@ -56,3 +56,20 @@ export async function deletePrivateKeySecret(id: string, chunkCount: number): Pr
   );
   await deleteSecureValue(getPrivateKeyPassphraseKey(id)).catch(() => undefined);
 }
+
+export async function deletePrivateKeySecretChunksFrom(
+  id: string,
+  nextChunkCount: number,
+  previousChunkCount: number
+): Promise<void> {
+  if (previousChunkCount <= nextChunkCount) {
+    return;
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: previousChunkCount - nextChunkCount },
+      (_, index) => deleteSecureValue(getPrivateKeyChunkKey(id, nextChunkCount + index))
+    )
+  );
+}

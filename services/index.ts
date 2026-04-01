@@ -47,6 +47,7 @@ export {
   getPrivateKeySecretById,
   inferPrivateKeyAlgorithm,
   listPrivateKeys,
+  updatePrivateKeyEntry,
 } from './privateKeyService';
 export {
   deleteServerPassword,
@@ -56,6 +57,28 @@ export {
 export {
   createServerWithCredentials,
 } from './serverCreation';
+export {
+  updateServerWithCredentials,
+} from './serverUpdate';
+export {
+  buildServerPowerCommand,
+  runServerPowerAction,
+  type ServerPowerAction,
+} from './serverPowerActions';
+export {
+  authenticateWithBiometrics,
+  isBiometricAvailable,
+} from './deviceAuth';
+export {
+  clearSecurityPassword,
+  getSecurityPasswordStatus,
+  saveSecurityPassword,
+  verifySecurityPassword,
+} from './securityPassword';
+export {
+  getSecurityChallengeMode,
+  shouldRequireLaunchUnlock,
+} from './securityAccess';
 export {
   createTerminalSession,
 } from './terminalService';
