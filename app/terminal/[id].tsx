@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useColorScheme,
   View,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -30,12 +31,13 @@ import {
   getTerminalShortcutBarReservedSpace,
   getTerminalSurfaceResetState,
   isTerminalWebViewAvailable,
+  resolveTerminalAppearance,
   resolveTerminalShortcutInput,
   type TerminalModifierState,
   type TerminalSurfaceResetReason,
   type TerminalShortcutKey,
 } from '@/services';
-import { useServerStore } from '@/stores';
+import { useServerStore, useSettingsStore } from '@/stores';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 
 const INITIAL_MODIFIERS: TerminalModifierState = {
@@ -53,6 +55,8 @@ export default function TerminalSessionScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const terminalTheme = useSettingsStore((state) => state.terminalTheme);
+  const systemScheme = useColorScheme();
   const servers = useServerStore((state) => state.servers);
   const isHydrated = useServerStore((state) => state.isHydrated);
   const isHydrating = useServerStore((state) => state.isHydrating);
@@ -78,6 +82,11 @@ export default function TerminalSessionScreen() {
   const [showPlainTextModal, setShowPlainTextModal] = useState(false);
   const [plainText, setPlainText] = useState('');
   const contentContainerMode = getTerminalContentContainerMode(Platform.OS);
+  const terminalAppearance = resolveTerminalAppearance({
+    terminalTheme,
+    systemColorScheme: systemScheme === 'dark' ? 'dark' : 'light',
+    accent: colors.accent,
+  });
   const shortcutBarBottomInset = getTerminalShortcutBarBottomInset(insets.bottom, isKeyboardVisible);
   const shortcutBarOffset = getTerminalShortcutBarOffset(keyboardHeight, insets.bottom, isKeyboardVisible);
   const shortcutBarReservedSpace = getTerminalShortcutBarReservedSpace(
@@ -279,6 +288,11 @@ export default function TerminalSessionScreen() {
     setShowContextMenu(true);
   }, []);
 
+  const closeContextMenu = useCallback(() => {
+    setShowContextMenu(false);
+    terminalRef.current?.focus();
+  }, []);
+
   const handlePaste = useCallback(async () => {
     setShowContextMenu(false);
     try {
@@ -289,6 +303,8 @@ export default function TerminalSessionScreen() {
     } catch {
       // clipboard not available
     }
+
+    terminalRef.current?.focus();
   }, []);
 
   const handleCopyRequest = useCallback(() => {
@@ -299,6 +315,11 @@ export default function TerminalSessionScreen() {
   const handlePlainText = useCallback((text: string) => {
     setPlainText(text);
     setShowPlainTextModal(true);
+  }, []);
+
+  const closePlainTextModal = useCallback(() => {
+    setShowPlainTextModal(false);
+    terminalRef.current?.focus();
   }, []);
 
   const contentProps =
@@ -387,7 +408,7 @@ export default function TerminalSessionScreen() {
         {...contentProps}
       >
         <View
-          style={styles.terminalSurface}
+          style={[styles.terminalSurface, { backgroundColor: terminalAppearance.background }]}
           onLayout={() => {
             if (isTerminalReady) {
               requestTerminalFit();
@@ -409,7 +430,7 @@ export default function TerminalSessionScreen() {
             />
 
             {status === 'connecting' ? (
-              <View style={styles.overlay}>
+              <View style={[styles.overlay, { backgroundColor: terminalAppearance.overlayBackground }]}>
                 <ActivityIndicator color={colors.accent} />
                 <Text style={[styles.overlayTitle, { color: colors.text }]}>正在连接终端...</Text>
                 <Text style={[styles.overlayDesc, { color: colors.textSecondary }]}>
@@ -421,7 +442,7 @@ export default function TerminalSessionScreen() {
             ) : null}
 
             {status === 'error' ? (
-              <View style={[styles.overlay, { backgroundColor: 'rgba(8, 11, 18, 0.92)' }]}>
+              <View style={[styles.overlay, { backgroundColor: terminalAppearance.overlayBackground }]}>
                 <Ionicons name="warning-outline" size={28} color={colors.warning} />
                 <Text style={[styles.overlayTitle, { color: colors.text }]}>终端连接失败</Text>
                 <Text style={[styles.overlayDesc, { color: colors.textSecondary }]}>
@@ -442,7 +463,15 @@ export default function TerminalSessionScreen() {
         </View>
 
         {sendError ? (
-          <View style={[styles.inlineError, { borderTopColor: colors.warningLight }]}>
+          <View
+            style={[
+              styles.inlineError,
+              {
+                borderTopColor: colors.warningLight,
+                backgroundColor: terminalAppearance.inlineErrorBackground,
+              },
+            ]}
+          >
             <Ionicons name="warning-outline" size={16} color={colors.warning} />
             <Text style={[styles.inlineErrorText, { color: colors.warning }]} numberOfLines={2}>
               {sendError}
@@ -456,6 +485,7 @@ export default function TerminalSessionScreen() {
             {
               paddingBottom: shortcutBarBottomInset,
               bottom: shortcutBarOffset,
+              backgroundColor: terminalAppearance.toolbarBackground,
             },
           ]}
           onLayout={(event) => {
@@ -476,7 +506,7 @@ export default function TerminalSessionScreen() {
         <TouchableOpacity
           activeOpacity={1}
           style={styles.menuBackdrop}
-          onPress={() => setShowContextMenu(false)}
+          onPress={closeContextMenu}
         >
           <View
             style={[
@@ -512,22 +542,38 @@ export default function TerminalSessionScreen() {
         visible={showPlainTextModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowPlainTextModal(false)}
+        onRequestClose={closePlainTextModal}
       >
-        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+        <View
+          style={[
+            styles.modalContainer,
+            {
+              backgroundColor: colors.background,
+              paddingTop: insets.top + Spacing.sm,
+              paddingBottom: Math.max(insets.bottom, Spacing.md),
+            },
+          ]}
+        >
           <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>终端内容</Text>
-            <TouchableOpacity onPress={() => setShowPlainTextModal(false)}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            <View>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>终端内容</Text>
+              <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                长按选择文字，然后使用系统菜单复制
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.modalCloseButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={closePlainTextModal}
+            >
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
-          <Text style={[styles.modalHint, { color: colors.textSecondary }]}>
-            长按选择文字，然后使用系统菜单复制。
-          </Text>
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
-            <Text selectable style={[styles.plainTextContent, { color: colors.text }]}>
-              {plainText}
-            </Text>
+            <View style={[styles.plainTextCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text selectable style={[styles.plainTextContent, { color: colors.text }]}>
+                {plainText}
+              </Text>
+            </View>
           </ScrollView>
         </View>
       </Modal>
@@ -581,7 +627,6 @@ const styles = StyleSheet.create({
   terminalSurface: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: '#05070D',
   },
   terminalFrame: {
     flex: 1,
@@ -622,7 +667,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    backgroundColor: '#151926',
   },
   inlineErrorText: {
     ...Typography.bodySmall,
@@ -633,7 +677,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#151926',
   },
   centerState: {
     flex: 1,
@@ -684,22 +727,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingBottom: Spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.md,
   },
   modalTitle: {
     ...Typography.h3,
   },
-  modalHint: {
-    ...Typography.caption,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
+  modalSubtitle: {
+    ...Typography.bodySmall,
+    marginTop: 2,
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalScroll: {
     flex: 1,
   },
   modalScrollContent: {
     padding: Spacing.lg,
+  },
+  plainTextCard: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
   },
   plainTextContent: {
     fontFamily: 'monospace',

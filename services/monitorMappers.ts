@@ -87,12 +87,23 @@ const GB = MB * 1024;
 const PERCENT_AXIS_VALUES = [0, 25, 50, 75, 100];
 const TREND_WINDOW_SIZE = 6;
 
-function resolveOSType(os?: string): OSType {
-  if (!os) {
+export function inferOSType(source?: string | OSType): OSType {
+  if (!source) {
     return 'unknown';
   }
 
-  const normalized = os.toLowerCase();
+  if (
+    source === 'linux' ||
+    source === 'ubuntu' ||
+    source === 'debian' ||
+    source === 'centos' ||
+    source === 'windows' ||
+    source === 'unknown'
+  ) {
+    return source;
+  }
+
+  const normalized = source.toLowerCase();
   if (normalized.includes('ubuntu')) return 'ubuntu';
   if (normalized.includes('debian')) return 'debian';
   if (normalized.includes('centos') || normalized.includes('red hat') || normalized.includes('rhel')) return 'centos';
@@ -102,9 +113,7 @@ function resolveOSType(os?: string): OSType {
 }
 
 export function getOSVisualMeta(source?: string | OSType): OSVisualMeta {
-  const osType = typeof source === 'string'
-    ? resolveOSType(source)
-    : (source ?? 'unknown');
+  const osType = inferOSType(source);
 
   switch (osType) {
     case 'ubuntu':
@@ -368,7 +377,7 @@ export function toServerCardData({
   return {
     id: server.id,
     name: server.name,
-    os: resolveOSType(systemInfo?.os),
+    os: systemInfo?.os ? inferOSType(systemInfo.os) : (server.osType ?? 'unknown'),
     status,
     temperature: snapshot?.temperature.value ?? null,
     load: snapshot?.cpu.load[0] ?? 0,
@@ -398,10 +407,12 @@ export function toMonitorDetailData({
   snapshot,
   systemInfo,
   history,
+  server,
 }: {
   snapshot: MonitorSnapshot;
   systemInfo: SystemInfo;
   history: MonitorSnapshot[];
+  server?: Pick<ServerConfig, 'osType'>;
 }): MonitorDetailData {
   const timelineSource = history.length > 0 ? history : [snapshot];
   const timeline = timelineSource.slice(-TREND_WINDOW_SIZE);
@@ -409,7 +420,7 @@ export function toMonitorDetailData({
   return {
     header: {
       osName: `${systemInfo.os} ${systemInfo.arch}`.trim(),
-      osIcon: getOSVisualMeta(systemInfo.os),
+      osIcon: getOSVisualMeta(systemInfo.os || server?.osType),
       load1: snapshot.cpu.load[0] ?? 0,
       load5: snapshot.cpu.load[1] ?? 0,
       load15: snapshot.cpu.load[2] ?? 0,

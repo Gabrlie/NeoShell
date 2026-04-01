@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { disconnectServer, getMonitorSnapshot, getSystemInfo, resetMonitorBaseline } from '@/services';
+import { inferOSType } from '@/services/monitorMappers';
 import { useMonitorStore, useServerStore, useSettingsStore } from '@/stores';
 import type { ConnectionStatus, ServerConfig } from '@/types';
 
@@ -23,12 +24,14 @@ export function useServerMonitoring(
   }: UseServerMonitoringOptions = {},
 ) {
   const refreshInterval = useSettingsStore((state) => state.refreshInterval);
+  const autoReconnect = useSettingsStore((state) => state.autoReconnect);
   const setSystemInfo = useMonitorStore((state) => state.setSystemInfo);
   const updateSnapshot = useMonitorStore((state) => state.updateSnapshot);
   const clearServerRuntime = useMonitorStore((state) => state.clearServerRuntime);
   const setConnectionStatus = useServerStore((state) => state.setConnectionStatus);
   const markMonitorSuccess = useServerStore((state) => state.markMonitorSuccess);
   const markMonitorFailure = useServerStore((state) => state.markMonitorFailure);
+  const updateServer = useServerStore((state) => state.updateServer);
 
   useEffect(() => {
     if (!server || !enabled) {
@@ -75,6 +78,10 @@ export function useServerMonitoring(
           const systemInfo = await getSystemInfo(server);
           if (cancelled) return;
           setSystemInfo(server.id, systemInfo);
+          const detectedOsType = inferOSType(systemInfo.os);
+          if ((server.osType ?? 'unknown') !== detectedOsType) {
+            await updateServer(server.id, { osType: detectedOsType });
+          }
         }
 
         const snapshot = await getMonitorSnapshot(server);
@@ -84,6 +91,16 @@ export function useServerMonitoring(
       } catch (error) {
         if (cancelled) return;
         const message = error instanceof Error ? error.message : '未知错误';
+
+        if (!autoReconnect) {
+          stopPolling = true;
+          clearServerRuntime(server.id);
+          resetMonitorBaseline(server.id);
+          setConnectionStatus(server.id, 'disconnected', message);
+          await disconnectServer(server.id).catch(() => undefined);
+          return;
+        }
+
         const failureState = markMonitorFailure(server.id, message);
 
         if (failureState.shouldClearRuntime) {
@@ -117,6 +134,8 @@ export function useServerMonitoring(
     server,
     setConnectionStatus,
     setSystemInfo,
+    autoReconnect,
+    updateServer,
     updateSnapshot,
   ]);
 }

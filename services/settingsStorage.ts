@@ -6,6 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AppSettings } from '@/types';
 import { DEFAULT_SETTINGS } from '@/types';
+import { normalizeTerminalFontFamily } from './terminalFontProfile';
 
 const SETTINGS_STORAGE_KEY = '@neoshell/settings';
 
@@ -23,6 +24,19 @@ function migrateLegacySettings(settings: LegacySettings): Partial<AppSettings> {
       settings.biometricPreferredEnabled ?? settings.biometricEnabled ?? DEFAULT_SETTINGS.biometricPreferredEnabled,
     sensitiveActionProtectionEnabled:
       settings.sensitiveActionProtectionEnabled ?? DEFAULT_SETTINGS.sensitiveActionProtectionEnabled,
+    sensitiveActionMode:
+      settings.sensitiveActionMode ?? DEFAULT_SETTINGS.sensitiveActionMode,
+    terminalTheme:
+      settings.terminalTheme ?? DEFAULT_SETTINGS.terminalTheme,
+    terminalFontFamily: normalizeTerminalFontFamily(
+      settings.terminalFontFamily ?? DEFAULT_SETTINGS.terminalFontFamily
+    ),
+    updateMirrorSource:
+      settings.updateMirrorSource ?? DEFAULT_SETTINGS.updateMirrorSource,
+    customUpdateMirrorApiBaseUrl:
+      settings.customUpdateMirrorApiBaseUrl ?? DEFAULT_SETTINGS.customUpdateMirrorApiBaseUrl,
+    customUpdateMirrorDownloadBaseUrl:
+      settings.customUpdateMirrorDownloadBaseUrl ?? DEFAULT_SETTINGS.customUpdateMirrorDownloadBaseUrl,
   };
 }
 

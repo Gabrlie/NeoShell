@@ -6,6 +6,11 @@ export function buildTerminalHtml(theme: {
   foreground: string;
   cursor: string;
   selection: string;
+  fontSize: number;
+  fontFamily: string;
+  fontFaceCss?: string;
+  fontStylesheetUrl?: string;
+  letterSpacing: number;
 }) {
   return `
 <!DOCTYPE html>
@@ -20,7 +25,10 @@ export function buildTerminalHtml(theme: {
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/xterm@${XTERM_VERSION}/css/xterm.min.css"
     />
+    ${theme.fontStylesheetUrl ? `<link rel="stylesheet" href="${theme.fontStylesheetUrl}" />` : ''}
     <style>
+      ${theme.fontFaceCss ?? ''}
+
       html, body {
         margin: 0;
         padding: 0;
@@ -28,6 +36,9 @@ export function buildTerminalHtml(theme: {
         height: 100%;
         overflow: hidden;
         background: ${theme.background};
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       #terminal {
@@ -36,15 +47,41 @@ export function buildTerminalHtml(theme: {
         padding: 8px 8px 0 8px;
         box-sizing: border-box;
         touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       .xterm {
         height: 100%;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       .xterm-viewport,
       .xterm-screen {
         width: 100% !important;
+      }
+
+      .xterm,
+      .xterm *,
+      .xterm-helper-textarea {
+        -webkit-touch-callout: none !important;
+      }
+
+      .xterm-rows,
+      .xterm-screen canvas {
+        font-variant-ligatures: none;
+        font-feature-settings: "liga" 0, "calt" 0;
+      }
+
+      .xterm-rows {
+        letter-spacing: ${theme.letterSpacing}px;
+      }
+
+      .xterm-helper-textarea {
+        caret-color: transparent !important;
       }
     </style>
   </head>
@@ -62,12 +99,27 @@ export function buildTerminalHtml(theme: {
 
         function initTerminal() {
           var terminalRoot = document.getElementById('terminal');
+          document.addEventListener('contextmenu', function (event) {
+            event.preventDefault();
+          });
+
+          function clearNativeSelection() {
+            if (window.getSelection) {
+              window.getSelection().removeAllRanges();
+            }
+
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+              document.activeElement.blur();
+            }
+          }
+
           var term = new window.Terminal({
             // Keep logical soft wraps intact so backspace can traverse wrapped command lines.
             convertEol: false,
             cursorBlink: true,
-            fontFamily: 'Menlo, Consolas, monospace',
-            fontSize: 14,
+            fontFamily: ${JSON.stringify(theme.fontFamily)},
+            fontSize: ${theme.fontSize},
+            letterSpacing: ${theme.letterSpacing},
             lineHeight: 1.3,
             theme: {
               background: '${theme.background}',
@@ -81,6 +133,19 @@ export function buildTerminalHtml(theme: {
           term.open(terminalRoot);
           fitAddon.fit();
           term.focus();
+
+          function refreshTerminalFontMetrics() {
+            term.options.fontFamily = ${JSON.stringify(theme.fontFamily)};
+            term.options.fontSize = ${theme.fontSize};
+            term.options.letterSpacing = ${theme.letterSpacing};
+            fitAddon.fit();
+          }
+
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () {
+              refreshTerminalFontMetrics();
+            });
+          }
 
           term.onData(function (data) {
             post('input', data);
@@ -142,6 +207,10 @@ export function buildTerminalHtml(theme: {
             var startY = touch.pageY;
             longPressTimer = setTimeout(function () {
               longPressTimer = null;
+              clearNativeSelection();
+              if (typeof term.blur === 'function') {
+                term.blur();
+              }
               post('longpress', JSON.stringify({ x: startX, y: startY }));
             }, 500);
           }, { passive: true });

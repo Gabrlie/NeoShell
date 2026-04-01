@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,21 +10,22 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 
-import { Card, Badge } from '@/components/ui';
+import { Badge, Card } from '@/components/ui';
 import { useTheme } from '@/hooks';
 import { useSensitiveRouteGuard } from '@/hooks/useSensitiveRouteGuard';
 import {
   createServerWithCredentials,
   deleteServerPassword,
   saveServerPassword,
+  showAlert,
   testSSHConnection,
   updateServerWithCredentials,
 } from '@/services';
 import { usePrivateKeyStore, useServerStore } from '@/stores';
 import { BorderRadius, Spacing, Typography } from '@/theme';
-import type { AuthMethod, ServerConfig, ServerDataSource } from '@/types';
+import type { AuthMethod, ServerConfig } from '@/types';
 import { DEFAULT_SSH_PORT } from '@/utils';
 
 export default function ModalScreen() {
@@ -38,9 +38,7 @@ export default function ModalScreen() {
   const hydrateKeys = usePrivateKeyStore((state) => state.hydrateKeys);
   const keyStoreHydrated = usePrivateKeyStore((state) => state.isHydrated);
   const privateKeys = usePrivateKeyStore((state) => state.keys);
-
-  // 编辑模式下找到目标服务器
-  const editingServer = isEditing ? servers.find((s) => s.id === editId) : undefined;
+  const editingServer = isEditing ? servers.find((server) => server.id === editId) : undefined;
 
   const [name, setName] = useState(editingServer?.name ?? '');
   const [host, setHost] = useState(editingServer?.host ?? '');
@@ -49,12 +47,10 @@ export default function ModalScreen() {
   const [group, setGroup] = useState(editingServer?.group ?? '');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [dataSource, setDataSource] = useState<ServerDataSource>(editingServer?.dataSource ?? 'mock');
   const [authMethod, setAuthMethod] = useState<AuthMethod>(editingServer?.authMethod ?? 'password');
   const [selectedPrivateKeyId, setSelectedPrivateKeyId] = useState<string | undefined>(editingServer?.privateKeyId);
   const [submitting, setSubmitting] = useState(false);
   const [testing, setTesting] = useState(false);
-  const isSSH = dataSource === 'ssh';
 
   useSensitiveRouteGuard(
     isEditing ? '验证后继续编辑服务器' : '验证后继续新增服务器',
@@ -68,30 +64,12 @@ export default function ModalScreen() {
   }, [hydrateKeys, keyStoreHydrated]);
 
   useEffect(() => {
-    if (isSSH && authMethod === 'key' && !selectedPrivateKeyId && privateKeys.length > 0) {
+    if (authMethod === 'key' && !selectedPrivateKeyId && privateKeys.length > 0) {
       setSelectedPrivateKeyId(privateKeys[0].id);
     }
-  }, [authMethod, isSSH, privateKeys, selectedPrivateKeyId]);
+  }, [authMethod, privateKeys, selectedPrivateKeyId]);
 
   const selectedPrivateKey = privateKeys.find((item) => item.id === selectedPrivateKeyId);
-
-  const noteLines = useMemo(() => {
-    if (isSSH) {
-      return [
-        '服务器配置会持久化到本地。',
-        authMethod === 'password'
-          ? '密码会单独进入安全存储，不会写进普通配置。'
-          : '私钥正文与口令会进入安全存储，服务器只保存私钥引用。',
-        '真实 SSH 连接需要使用 Dev Build，Expo Go 只会提示不可用。',
-      ];
-    }
-
-    return [
-      '服务器配置会持久化到本地。',
-      '监控数据来自 Mock 采集源，适合 Expo Go 阶段联调 UI。',
-      '后续可将同一服务器改成 SSH 数据源。',
-    ];
-  }, [authMethod, isSSH]);
 
   const parseServerDraft = (): Omit<ServerConfig, 'id' | 'sortOrder' | 'createdAt'> | null => {
     const trimmedName = name.trim();
@@ -100,28 +78,36 @@ export default function ModalScreen() {
     const parsedPort = Number.parseInt(port, 10);
 
     if (!trimmedName || !trimmedHost || !trimmedUsername) {
-      Alert.alert('信息不完整', '请至少填写服务器名称、主机地址和用户名。');
+      void showAlert({
+        title: '信息不完整',
+        message: '请至少填写服务器名称、主机地址和用户名。',
+      });
       return null;
     }
 
     if (!Number.isFinite(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
-      Alert.alert('端口无效', '请输入 1 到 65535 之间的端口号。');
+      void showAlert({
+        title: '端口无效',
+        message: '请输入 1 到 65535 之间的端口号。',
+      });
       return null;
     }
 
-    const needsPasswordForEdit =
-      !isEditing ||
-      !editingServer ||
-      editingServer.dataSource !== 'ssh' ||
-      editingServer.authMethod !== 'password';
+    const needsPasswordForEdit = !isEditing || !editingServer || editingServer.authMethod !== 'password';
 
-    if (isSSH && authMethod === 'password' && needsPasswordForEdit && !password.trim()) {
-      Alert.alert('密码未填写', '请选择密码认证时，必须填写 SSH 密码。');
+    if (authMethod === 'password' && needsPasswordForEdit && !password.trim()) {
+      void showAlert({
+        title: '密码未填写',
+        message: '请选择密码认证时，必须填写 SSH 密码。',
+      });
       return null;
     }
 
-    if (isSSH && authMethod === 'key' && !selectedPrivateKeyId) {
-      Alert.alert('未选择私钥', '请选择一个私钥，或者先去创建私钥。');
+    if (authMethod === 'key' && !selectedPrivateKeyId) {
+      void showAlert({
+        title: '未选择私钥',
+        message: '请选择一个私钥，或者先去创建私钥。',
+      });
       return null;
     }
 
@@ -131,7 +117,7 @@ export default function ModalScreen() {
       port: parsedPort,
       username: trimmedUsername,
       authMethod,
-      dataSource,
+      dataSource: 'ssh',
       privateKeyId: authMethod === 'key' ? selectedPrivateKeyId : undefined,
       group: group.trim() || undefined,
     };
@@ -139,7 +125,7 @@ export default function ModalScreen() {
 
   const handleTestConnection = async () => {
     const draft = parseServerDraft();
-    if (!draft || draft.dataSource !== 'ssh') {
+    if (!draft) {
       return;
     }
 
@@ -159,10 +145,16 @@ export default function ModalScreen() {
           : { authMethod: 'key', privateKeyId: selectedPrivateKeyId }
       );
 
-      Alert.alert('测试成功', result.message);
+      await showAlert({
+        title: '测试成功',
+        message: result.message,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : '未知错误';
-      Alert.alert('测试失败', message);
+      await showAlert({
+        title: '测试失败',
+        message,
+      });
     } finally {
       setTesting(false);
     }
@@ -192,7 +184,6 @@ export default function ModalScreen() {
           deletePassword: deleteServerPassword,
         });
       } else {
-        // 新增模式
         await createServerWithCredentials({
           draft,
           password,
@@ -205,7 +196,10 @@ export default function ModalScreen() {
       router.back();
     } catch (error) {
       const message = error instanceof Error ? error.message : '未知错误';
-      Alert.alert('保存失败', message);
+      await showAlert({
+        title: '保存失败',
+        message,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -216,38 +210,25 @@ export default function ModalScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.title, { color: colors.text }]}>{isEditing ? '编辑服务器' : '新增服务器'}</Text>
-        <Text style={[styles.desc, { color: colors.textSecondary }]}>
-          支持演示模式和真实 SSH。真实 SSH 下可选密码认证或私钥认证，私钥从独立私钥库复用。
-        </Text>
+      <Stack.Screen
+        options={{
+          title: isEditing ? '编辑服务器' : '新增服务器',
+        }}
+      />
 
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Card style={styles.formCard}>
           <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.text }]}>数据源</Text>
+            <Text style={[styles.label, { color: colors.text }]}>认证方式</Text>
             <SelectionRow
               options={[
-                { label: 'Mock', value: 'mock' },
-                { label: 'SSH', value: 'ssh' },
+                { label: '密码', value: 'password' },
+                { label: '私钥', value: 'key' },
               ]}
-              selectedValue={dataSource}
-              onSelect={(value) => setDataSource(value as ServerDataSource)}
+              selectedValue={authMethod}
+              onSelect={(value) => setAuthMethod(value as AuthMethod)}
             />
           </View>
-
-          {isSSH ? (
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.text }]}>认证方式</Text>
-              <SelectionRow
-                options={[
-                  { label: '密码', value: 'password' },
-                  { label: '私钥', value: 'key' },
-                ]}
-                selectedValue={authMethod}
-                onSelect={(value) => setAuthMethod(value as AuthMethod)}
-              />
-            </View>
-          ) : null}
 
           <Field
             label="服务器名称"
@@ -281,7 +262,7 @@ export default function ModalScreen() {
             placeholder="生产 / 测试 / 家庭实验室"
           />
 
-          {isSSH && authMethod === 'password' ? (
+          {authMethod === 'password' ? (
             <View style={styles.field}>
               <Text style={[styles.label, { color: colors.text }]}>SSH 密码</Text>
               <View style={styles.inputRow}>
@@ -316,7 +297,7 @@ export default function ModalScreen() {
             </View>
           ) : null}
 
-          {isSSH && authMethod === 'key' ? (
+          {authMethod === 'key' ? (
             <View style={styles.field}>
               <View style={styles.privateKeyHeader}>
                 <Text style={[styles.label, { color: colors.text }]}>选择私钥</Text>
@@ -340,7 +321,8 @@ export default function ModalScreen() {
                         styles.privateKeyOption,
                         {
                           borderColor: selectedPrivateKeyId === item.id ? colors.accent : colors.border,
-                          backgroundColor: selectedPrivateKeyId === item.id ? colors.accentLight : colors.backgroundSecondary,
+                          backgroundColor:
+                            selectedPrivateKeyId === item.id ? colors.accentLight : colors.backgroundSecondary,
                         },
                       ]}
                       onPress={() => setSelectedPrivateKeyId(item.id)}
@@ -367,29 +349,18 @@ export default function ModalScreen() {
           ) : null}
         </Card>
 
-        <Card style={[styles.tipCard, { backgroundColor: colors.accentLight }]}>
-          <Text style={[styles.tipTitle, { color: colors.accent }]}>当前表单说明</Text>
-          {noteLines.map((line) => (
-            <Text key={line} style={[styles.tipText, { color: colors.textSecondary }]}>
-              {line}
-            </Text>
-          ))}
-        </Card>
-
-        {isSSH ? (
-          <TouchableOpacity
-            style={[
-              styles.secondaryBtn,
-              { borderColor: colors.accent, opacity: testing ? 0.7 : 1 },
-            ]}
-            onPress={() => void handleTestConnection()}
-            disabled={testing}
-          >
-            <Text style={[styles.secondaryText, { color: colors.accent }]}>
-              {testing ? '测试中...' : '测试连接'}
-            </Text>
-          </TouchableOpacity>
-        ) : null}
+        <TouchableOpacity
+          style={[
+            styles.secondaryBtn,
+            { borderColor: colors.accent, opacity: testing ? 0.7 : 1 },
+          ]}
+          onPress={() => void handleTestConnection()}
+          disabled={testing}
+        >
+          <Text style={[styles.secondaryText, { color: colors.accent }]}>
+            {testing ? '测试中...' : '测试'}
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[
@@ -400,7 +371,7 @@ export default function ModalScreen() {
           disabled={submitting}
         >
           <Text style={[styles.submitText, { color: colors.accentText }]}>
-            {submitting ? '保存中...' : isEditing ? '保存修改' : isSSH ? '保存 SSH 服务器' : '创建演示服务器'}
+            {submitting ? '保存中...' : isEditing ? '保存修改' : '保存服务器'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -413,14 +384,12 @@ function Field({
   value,
   onChangeText,
   placeholder,
-  secureTextEntry,
   keyboardType,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
-  secureTextEntry?: boolean;
   keyboardType?: 'default' | 'numeric';
 }) {
   const { colors } = useTheme();
@@ -441,7 +410,6 @@ function Field({
         placeholderTextColor={colors.textTertiary}
         value={value}
         onChangeText={onChangeText}
-        secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize="none"
       />
@@ -492,14 +460,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.xl,
-  },
-  title: {
-    ...Typography.h2,
-    marginBottom: Spacing.md,
-  },
-  desc: {
-    ...Typography.body,
-    marginBottom: Spacing.lg,
   },
   formCard: {
     gap: Spacing.md,
@@ -590,18 +550,6 @@ const styles = StyleSheet.create({
   },
   selectedHint: {
     ...Typography.caption,
-  },
-  tipCard: {
-    marginTop: Spacing.lg,
-  },
-  tipTitle: {
-    ...Typography.body,
-    fontWeight: '700',
-    marginBottom: Spacing.sm,
-  },
-  tipText: {
-    ...Typography.bodySmall,
-    marginTop: 2,
   },
   secondaryBtn: {
     marginTop: Spacing.lg,

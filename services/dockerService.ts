@@ -615,33 +615,8 @@ export function buildDockerExecCommand(
 export async function getDockerDashboard(server: ServerConfig): Promise<DockerDashboard> {
   const sshService = getSSHService();
 
-  if (server.dataSource !== 'ssh' || !sshService.isSSHAvailable()) {
-    const containers = [createMockContainer(server.id, 0), createMockContainer(server.id, 1)];
-    const images = createMockImages();
-    const volumes = createMockVolumes();
-    return {
-      hasDocker: true,
-      overview: {
-        engineVersion: 'mock-28.0.0',
-        containersRunning: containers.filter((item) => item.state === 'running').length,
-        containersStopped: containers.filter((item) => item.state !== 'running').length,
-        containersTotal: containers.length,
-        imagesTotal: images.length,
-        composeProjectsTotal: 1,
-        volumesTotal: volumes.length,
-      },
-      containers,
-      composeProjects: [
-        {
-          name: 'demo',
-          status: 'running(1)',
-          configFiles: ['/srv/demo/compose.yml'],
-          source: 'runtime',
-        },
-      ],
-      images,
-      volumes,
-    };
+  if (!sshService.isSSHAvailable()) {
+    throw new Error('当前安装包未包含 SSH 原生模块，请使用 Dev Build 后再连接服务器。');
   }
 
   try {

@@ -4,7 +4,7 @@
 
 /** SSH 认证方式 */
 export type AuthMethod = 'password' | 'key';
-export type ServerDataSource = 'mock' | 'ssh';
+export type ServerDataSource = 'ssh';
 
 /** 服务器连接配置 */
 export interface ServerConfig {
@@ -22,6 +22,8 @@ export interface ServerConfig {
   authMethod: AuthMethod;
   /** 监控数据来源 */
   dataSource: ServerDataSource;
+  /** 持久化记录的系统类型，用于在首帧无系统信息时优先显示对应图标 */
+  osType?: OSType;
   /** 认证方式为私钥时引用的私钥 ID */
   privateKeyId?: string;
   /** 分组名称 */

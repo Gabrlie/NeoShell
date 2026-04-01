@@ -549,33 +549,25 @@ export function createMockSystemInfo(server: Pick<ServerConfig, 'name' | 'host'>
 }
 
 export async function getSystemInfo(server: ServerConfig): Promise<SystemInfo> {
-  if (server.dataSource === 'ssh') {
-    const sshService = getSSHService();
-    if (sshService.isSSHAvailable()) {
-      const output = await sshService.executeSSHCommand(server, SYSTEM_INFO_COMMAND);
-      return parseSystemInfoOutput(output);
-    }
+  const sshService = getSSHService();
+  if (!sshService.isSSHAvailable()) {
+    throw new Error('当前安装包未包含 SSH 原生模块，请使用 Dev Build 后再连接服务器。');
   }
 
-  return createMockSystemInfo(server);
+  const output = await sshService.executeSSHCommand(server, SYSTEM_INFO_COMMAND);
+  return parseSystemInfoOutput(output);
 }
 
 export async function getMonitorSnapshot(server: ServerConfig): Promise<MonitorSnapshot> {
-  if (server.dataSource === 'ssh') {
-    const sshService = getSSHService();
-    if (sshService.isSSHAvailable()) {
-      const output = await sshService.executeSSHCommand(server, MONITOR_COMMAND);
-      const current = parseMonitorOutput(output, Date.now());
-      const previous = previousReadings.get(server.id);
-      const snapshot = createMonitorSnapshot(current, previous);
-      previousReadings.set(server.id, current);
-      return snapshot;
-    }
+  const sshService = getSSHService();
+  if (!sshService.isSSHAvailable()) {
+    throw new Error('当前安装包未包含 SSH 原生模块，请使用 Dev Build 后再连接服务器。');
   }
 
-  return createMockMonitorSnapshot({
-    serverId: server.id,
-    totalMemory: 16 * 1024 * 1024 * 1024,
-    totalDisk: 256 * 1024 * 1024 * 1024,
-  });
+  const output = await sshService.executeSSHCommand(server, MONITOR_COMMAND);
+  const current = parseMonitorOutput(output, Date.now());
+  const previous = previousReadings.get(server.id);
+  const snapshot = createMonitorSnapshot(current, previous);
+  previousReadings.set(server.id, current);
+  return snapshot;
 }

@@ -26,6 +26,46 @@ export function shouldRequireLaunchUnlock({
   return now - lastBackgroundAt >= sessionTimeout * 1000;
 }
 
+export function shouldRequireSensitiveActionUnlock({
+  sensitiveActionProtectionEnabled,
+  hasSecurityPassword,
+  sensitiveActionMode,
+  sessionTimeout,
+  lastBackgroundAt,
+  lastVerifiedAt,
+  now,
+}: {
+  sensitiveActionProtectionEnabled: boolean;
+  hasSecurityPassword: boolean;
+  sensitiveActionMode: 'session' | 'always';
+  sessionTimeout: number;
+  lastBackgroundAt: number | null;
+  lastVerifiedAt: number | null;
+  now: number;
+}): boolean {
+  if (!sensitiveActionProtectionEnabled || !hasSecurityPassword) {
+    return false;
+  }
+
+  if (sensitiveActionMode === 'always') {
+    return true;
+  }
+
+  if (lastVerifiedAt == null) {
+    return true;
+  }
+
+  if (sessionTimeout === 0) {
+    return false;
+  }
+
+  if (lastBackgroundAt == null) {
+    return false;
+  }
+
+  return now - lastBackgroundAt >= sessionTimeout * 1000;
+}
+
 export function getSecurityChallengeMode({
   biometricPreferredEnabled,
   biometricAvailable,
@@ -44,4 +84,28 @@ export function getSecurityChallengeMode({
   }
 
   return 'none';
+}
+
+export function shouldRequireSecuritySettingsUnlock({
+  biometricPreferredEnabled,
+  hasSecurityPassword,
+}: {
+  biometricPreferredEnabled: boolean;
+  hasSecurityPassword: boolean;
+}): boolean {
+  return biometricPreferredEnabled && hasSecurityPassword;
+}
+
+export function getSecurityPasswordRemovalUpdates({
+  biometricPreferredEnabled,
+}: {
+  biometricPreferredEnabled: boolean;
+}): Partial<{ biometricPreferredEnabled: boolean }> {
+  if (!biometricPreferredEnabled) {
+    return {};
+  }
+
+  return {
+    biometricPreferredEnabled: false,
+  };
 }

@@ -13,6 +13,7 @@ import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 
 import { SecurityChallengeModal } from '@/components/security/SecurityChallengeModal';
+import { DialogHost } from '@/components/ui';
 import { shouldRequireLaunchUnlock } from '@/services/securityAccess';
 import { useAuthStore } from '@/stores/authStore';
 import { useTheme } from '@/hooks/useTheme';
@@ -77,6 +78,7 @@ function RootLayoutNav() {
   const sensitiveChallenge = useAuthStore((state) => state.sensitiveChallenge);
   const lockApp = useAuthStore((state) => state.lockApp);
   const unlockApp = useAuthStore((state) => state.unlockApp);
+  const markVerified = useAuthStore((state) => state.markVerified);
   const markBackgrounded = useAuthStore((state) => state.markBackgrounded);
   const resolveSensitiveAccess = useAuthStore((state) => state.resolveSensitiveAccess);
   const initializedRef = useRef(false);
@@ -146,6 +148,13 @@ function RootLayoutNav() {
           name="server/[id]/monitor"
           options={{
             headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="server/[id]/test"
+          options={{
+            title: '连接测试',
+            headerBackTitle: '返回',
           }}
         />
         <Stack.Screen
@@ -278,7 +287,10 @@ function RootLayoutNav() {
         biometricPreferredEnabled={biometricPreferredEnabled}
         hasSecurityPassword={hasSecurityPassword}
         successLabel="解锁"
-        onSuccess={unlockApp}
+        onSuccess={() => {
+          markVerified();
+          unlockApp();
+        }}
         onCancel={() => undefined}
       />
       <SecurityChallengeModal
@@ -289,9 +301,13 @@ function RootLayoutNav() {
         biometricPreferredEnabled={biometricPreferredEnabled}
         hasSecurityPassword={hasSecurityPassword}
         successLabel="继续"
-        onSuccess={() => resolveSensitiveAccess(true)}
+        onSuccess={() => {
+          markVerified();
+          resolveSensitiveAccess(true);
+        }}
         onCancel={() => resolveSensitiveAccess(false)}
       />
+      <DialogHost />
     </ThemeProvider>
   );
 }

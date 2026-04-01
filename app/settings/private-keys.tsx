@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { Stack, router } from 'expo-router';
 
 import { Card, Badge } from '@/components/ui';
 import { useTheme } from '@/hooks';
 import { useSensitiveActionAccess } from '@/hooks/useSensitiveActionAccess';
+import { showAlert, showConfirm } from '@/services';
 import { usePrivateKeyStore, useServerStore } from '@/stores';
-import { BorderRadius, Spacing, Typography } from '@/theme';
+import { Spacing, Typography } from '@/theme';
 
 export default function PrivateKeysScreen() {
   const { colors } = useTheme();
@@ -34,7 +35,10 @@ export default function PrivateKeysScreen() {
 
   const handleDelete = async (keyId: string) => {
     if (!areServersHydrated) {
-      Alert.alert('引用关系加载中', '正在读取服务器列表，请稍后再试。');
+      await showAlert({
+        title: '引用关系加载中',
+        message: '正在读取服务器列表，请稍后再试。',
+      });
       return;
     }
 
@@ -46,10 +50,10 @@ export default function PrivateKeysScreen() {
     }
 
     if (referencedBy.length > 0) {
-      Alert.alert(
-        '无法删除私钥',
-        `以下服务器仍在使用该私钥：${referencedBy.map((server) => server.name).join('、')}`
-      );
+      await showAlert({
+        title: '无法删除私钥',
+        message: `以下服务器仍在使用该私钥：${referencedBy.map((server) => server.name).join('、')}`,
+      });
       return;
     }
 
@@ -61,34 +65,31 @@ export default function PrivateKeysScreen() {
       return;
     }
 
-    Alert.alert('删除私钥', `确认删除「${keyEntry.name}」吗？`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          void removeKey(keyEntry);
-        },
-      },
-    ]);
+    const confirmed = await showConfirm({
+      title: '删除私钥',
+      message: `确认删除「${keyEntry.name}」吗？`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    await removeKey(keyEntry);
   };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>私钥库</Text>
-        <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: colors.accent }]}
-          onPress={() => router.push('/settings/private-keys/new')}
-        >
-          <Ionicons name="add" size={18} color={colors.accentText} />
-          <Text style={[styles.addButtonText, { color: colors.accentText }]}>新增私钥</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={[styles.desc, { color: colors.textSecondary }]}>
-        私钥可被多台服务器复用。私钥正文与口令会进入安全存储，列表中只显示元数据摘要。
-      </Text>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <TouchableOpacity style={styles.headerAction} onPress={() => router.push('/settings/private-keys/new')}>
+              <Ionicons name="add" size={20} color={colors.accent} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       <View style={styles.list}>
         {keys.length === 0 ? (
@@ -109,26 +110,32 @@ export default function PrivateKeysScreen() {
 
             return (
               <Card key={item.id} style={styles.keyCard}>
-                <View style={styles.keyHeader}>
-                  <View style={styles.keyTitleBlock}>
-                    <Text style={[styles.keyName, { color: colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.keySummary, { color: colors.textSecondary }]}>{item.summary}</Text>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={styles.keyBody}
+                  onPress={() => router.push(`/settings/private-keys/${item.id}` as never)}
+                >
+                  <View style={styles.keyHeader}>
+                    <View style={styles.keyTitleBlock}>
+                      <Text style={[styles.keyName, { color: colors.text }]}>{item.name}</Text>
+                      <Text style={[styles.keySummary, { color: colors.textSecondary }]}>{item.summary}</Text>
+                    </View>
+                    <View style={styles.keyActions}>
+                      <TouchableOpacity onPress={() => router.push(`/settings/private-keys/${item.id}` as never)}>
+                        <Ionicons name="create-outline" size={18} color={colors.accent} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => void handleDelete(item.id)}>
+                        <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.keyActions}>
-                    <TouchableOpacity onPress={() => router.push(`/settings/private-keys/${item.id}` as never)}>
-                      <Ionicons name="create-outline" size={18} color={colors.accent} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => void handleDelete(item.id)}>
-                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
 
-                <View style={styles.keyMetaRow}>
-                  <Badge label={item.algorithm.toUpperCase()} variant="info" />
-                  {item.hasPassphrase ? <Badge label="有口令" variant="success" /> : <Badge label="无口令" />}
-                  <Badge label={`被 ${referenceCount} 台服务器使用`} variant="warning" />
-                </View>
+                  <View style={styles.keyMetaRow}>
+                    <Badge label={item.algorithm.toUpperCase()} variant="info" />
+                    {item.hasPassphrase ? <Badge label="有口令" variant="success" /> : <Badge label="无口令" />}
+                    <Badge label={`被 ${referenceCount} 台服务器使用`} variant="warning" />
+                  </View>
+                </TouchableOpacity>
               </Card>
             );
           })
@@ -142,33 +149,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  title: {
-    ...Typography.h2,
-  },
-  desc: {
-    ...Typography.body,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    height: 36,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.xs,
-  },
-  addButtonText: {
-    ...Typography.bodySmall,
-    fontWeight: '700',
+  headerAction: {
+    paddingHorizontal: Spacing.xs,
   },
   list: {
     padding: Spacing.lg,
@@ -187,7 +169,11 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   keyCard: {
+    padding: 0,
+  },
+  keyBody: {
     gap: Spacing.md,
+    padding: Spacing.md,
   },
   keyHeader: {
     flexDirection: 'row',

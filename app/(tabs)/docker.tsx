@@ -50,10 +50,7 @@ export default function DockerScreen() {
     };
   }, []);
 
-  const sshServers = useMemo(
-    () => servers.filter((server) => server.dataSource === 'ssh'),
-    [servers],
-  );
+  const sshServers = useMemo(() => servers, [servers]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -112,7 +109,7 @@ function DockerServerCard({
   const loadDashboard = useDockerStore((state) => state.loadDashboard);
   const systemInfo = useMonitorStore((state) => state.systemInfos[server.id]);
   const snapshot = useMonitorStore((state) => state.snapshots[server.id]);
-  const osMeta = getOSVisualMeta(systemInfo?.os);
+  const osMeta = getOSVisualMeta(systemInfo?.os || server.osType);
   const overview = runtime?.dashboard?.overview;
 
   useServerMonitoring(server, {

@@ -3,12 +3,39 @@
  */
 
 export {
+  APP_AUTHOR_GITHUB_URL,
+  APP_AUTHOR_GRAVATAR_URL,
+  APP_AUTHOR_NAME,
+  APP_LICENSE_NAME,
+  APP_LICENSE_SUMMARY,
+  APP_NAME,
+  APP_REPOSITORY_URL,
+  APP_TAGLINE,
+  TECH_STACK,
+} from './appMetadata';
+export {
+  buildLatestReleaseMetadataUrl,
+  buildReleaseAssetDownloadUrl,
+  checkForAppUpdate,
+  getDefaultUpdateMirrorSource,
+  listUpdateMirrorSources,
+  normalizeUpdateMirrorSourceKey,
+  resolveUpdateMirrorSource,
+  type UpdateCheckOptions,
+  type UpdateCheckResult,
+  type UpdateMirrorSource,
+  type UpdateMirrorSourceKey,
+} from './appUpdate';
+export {
   connectToServer,
   disconnectServer,
   executeSSHCommand,
   isSSHAvailable,
+  createSSHClientWithResolvedCredentials,
   normalizeSSHError,
+  resolveSSHCredentials,
   testSSHConnection,
+  withSSHTimeout,
 } from './ssh';
 export {
   createMockMonitorSnapshot,
@@ -76,9 +103,33 @@ export {
   verifySecurityPassword,
 } from './securityPassword';
 export {
+  showAlert,
+  showConfirm,
+  useDialogStore,
+} from './dialogService';
+export {
+  runServerConnectionTest,
+  type ServerConnectionTestLogEntry,
+  type ServerConnectionTestResult,
+  type ServerConnectionTestStage,
+} from './serverConnectionTest';
+export {
+  getSecurityPasswordRemovalUpdates,
   getSecurityChallengeMode,
+  shouldRequireSecuritySettingsUnlock,
+  shouldRequireSensitiveActionUnlock,
   shouldRequireLaunchUnlock,
 } from './securityAccess';
+export {
+  resolveTerminalAppearance,
+  type TerminalAppearance,
+} from './terminalAppearance';
+export {
+  getTerminalFontOptions,
+  normalizeTerminalFontFamily,
+  resolveTerminalFontProfile,
+  type TerminalFontProfile,
+} from './terminalFontProfile';
 export {
   createTerminalSession,
 } from './terminalService';

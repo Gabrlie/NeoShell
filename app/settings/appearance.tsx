@@ -1,16 +1,11 @@
-/**
- * 外观设置页
- * 主题切换、终端字体大小、终端字体族
- */
-
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/hooks/useTheme';
+import { getTerminalFontOptions, resolveTerminalAppearance, resolveTerminalFontProfile } from '@/services';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
-import type { ThemeMode } from '@/types';
+import type { TerminalTheme, ThemeMode } from '@/types';
 
 const THEME_OPTIONS: Array<{ label: string; value: ThemeMode; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { label: '跟随系统', value: 'system', icon: 'phone-portrait-outline' },
@@ -19,18 +14,31 @@ const THEME_OPTIONS: Array<{ label: string; value: ThemeMode; icon: React.Compon
 ];
 
 const FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16, 18, 20, 22, 24];
-
-const FONT_FAMILY_OPTIONS = [
-  { label: 'Monospace（系统默认）', value: 'monospace' },
-  { label: 'JetBrains Mono', value: 'JetBrains Mono' },
+const TERMINAL_THEME_OPTIONS: Array<{
+  label: string;
+  value: TerminalTheme;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+}> = [
+  { label: '跟随系统', value: 'system', icon: 'phone-portrait-outline' },
+  { label: '浅色', value: 'light', icon: 'sunny-outline' },
+  { label: '深色', value: 'dark', icon: 'moon-outline' },
 ];
 
 export default function AppearanceScreen() {
   const { colors } = useTheme();
+  const systemScheme = useColorScheme();
   const themeMode = useSettingsStore((s) => s.themeMode);
+  const terminalTheme = useSettingsStore((s) => s.terminalTheme);
   const terminalFontSize = useSettingsStore((s) => s.terminalFontSize);
   const terminalFontFamily = useSettingsStore((s) => s.terminalFontFamily);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
+  const terminalAppearance = resolveTerminalAppearance({
+    terminalTheme,
+    systemColorScheme: systemScheme === 'dark' ? 'dark' : 'light',
+    accent: colors.accent,
+  });
+  const terminalFontOptions = getTerminalFontOptions();
+  const terminalFontProfile = resolveTerminalFontProfile(terminalFontFamily);
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -50,6 +58,31 @@ export default function AppearanceScreen() {
                 },
               ]}
               onPress={() => updateSetting('themeMode', option.value)}
+            >
+              <Ionicons name={option.icon} size={20} color={colors.textSecondary} />
+              <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
+              {selected && <Ionicons name="checkmark" size={20} color={colors.accent} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* 终端主题 */}
+      <SectionTitle label="终端主题" />
+      <View style={[styles.card, { backgroundColor: colors.card }]}>
+        {TERMINAL_THEME_OPTIONS.map((option, index) => {
+          const selected = terminalTheme === option.value;
+          return (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionRow,
+                index < TERMINAL_THEME_OPTIONS.length - 1 && {
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: colors.border,
+                },
+              ]}
+              onPress={() => updateSetting('terminalTheme', option.value)}
             >
               <Ionicons name={option.icon} size={20} color={colors.textSecondary} />
               <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
@@ -92,8 +125,26 @@ export default function AppearanceScreen() {
         <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>
           预览：
         </Text>
-        <View style={[styles.previewBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
-          <Text style={[styles.previewText, { color: colors.text, fontSize: terminalFontSize, fontFamily: terminalFontFamily }]}>
+        <View
+          style={[
+            styles.previewBox,
+            {
+              backgroundColor: terminalAppearance.background,
+              borderColor: terminalAppearance.border,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.previewText,
+              {
+                color: terminalAppearance.foreground,
+                fontSize: terminalFontSize,
+                fontFamily: terminalFontProfile.previewFontFamily,
+                letterSpacing: terminalFontProfile.letterSpacing,
+              },
+            ]}
+          >
             user@server:~$ ls -la{'\n'}total 42{'\n'}drwxr-xr-x 6 user user 4096 Mar 31 12:00 .
           </Text>
         </View>
@@ -102,14 +153,14 @@ export default function AppearanceScreen() {
       {/* 终端字体族 */}
       <SectionTitle label="终端字体" />
       <View style={[styles.card, { backgroundColor: colors.card }]}>
-        {FONT_FAMILY_OPTIONS.map((option, index) => {
+        {terminalFontOptions.map((option, index) => {
           const selected = terminalFontFamily === option.value;
           return (
             <TouchableOpacity
               key={option.value}
               style={[
                 styles.optionRow,
-                index < FONT_FAMILY_OPTIONS.length - 1 && {
+                index < terminalFontOptions.length - 1 && {
                   borderBottomWidth: StyleSheet.hairlineWidth,
                   borderBottomColor: colors.border,
                 },

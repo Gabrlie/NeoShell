@@ -1,17 +1,29 @@
-/**
- * 安全设置页
- * 启动屏幕锁、敏感操作授权、安全密码
- */
-
-import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 
+import { Card } from '@/components/ui';
 import { useTheme } from '@/hooks/useTheme';
 import { isBiometricAvailable } from '@/services/deviceAuth';
+import { saveSecurityPassword, shouldRequireSecuritySettingsUnlock, showAlert, showConfirm } from '@/services';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
+import type { SensitiveActionMode } from '@/types';
 
 const SESSION_TIMEOUT_OPTIONS = [
   { label: '1 分钟', value: 60 },
@@ -20,29 +32,173 @@ const SESSION_TIMEOUT_OPTIONS = [
   { label: '永不', value: 0 },
 ];
 
+const SENSITIVE_ACTION_MODE_OPTIONS: Array<{
+  label: string;
+  description: string;
+  value: SensitiveActionMode;
+}> = [
+  { label: '复用当前会话', description: '会话有效期内验证一次即可继续后续敏感操作', value: 'session' },
+  { label: '每次都验证', description: '每次新增、编辑、删除服务器或私钥时都重新验证', value: 'always' },
+];
+
 export default function SecurityScreen() {
   const { colors } = useTheme();
+  const isFocused = useIsFocused();
   const launchProtectionEnabled = useSettingsStore((s) => s.launchProtectionEnabled);
   const sensitiveActionProtectionEnabled = useSettingsStore((s) => s.sensitiveActionProtectionEnabled);
+  const sensitiveActionMode = useSettingsStore((s) => s.sensitiveActionMode);
   const biometricPreferredEnabled = useSettingsStore((s) => s.biometricPreferredEnabled);
   const sessionTimeout = useSettingsStore((s) => s.sessionTimeout);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
+  const authHydrated = useAuthStore((s) => s.isHydrated);
   const hasSecurityPassword = useAuthStore((s) => s.hasSecurityPassword);
+  const setHasSecurityPassword = useAuthStore((s) => s.setHasSecurityPassword);
+  const requestSensitiveAccess = useAuthStore((s) => s.requestSensitiveAccess);
+  const markVerified = useAuthStore((s) => s.markVerified);
+  const entryChallengeHandledRef = useRef(false);
+  const [showPasswordSetupModal, setShowPasswordSetupModal] = useState(false);
+  const [pendingBiometricEnable, setPendingBiometricEnable] = useState(false);
+  const [setupPassword, setSetupPassword] = useState('');
+  const [setupPasswordConfirm, setSetupPasswordConfirm] = useState('');
+  const [setupSubmitting, setSetupSubmitting] = useState(false);
 
-  const promptSetSecurityPassword = () => {
-    Alert.alert(
-      '请先设置安全密码',
-      '启动屏幕锁、生物识别优先和敏感操作二次授权都依赖安全密码作为兜底验证方式。',
-      [
-        { text: '取消', style: 'cancel' },
-        { text: '去设置', onPress: () => router.push('/settings/security-password') },
-      ]
-    );
+  useEffect(() => {
+    if (!isFocused) {
+      entryChallengeHandledRef.current = false;
+    }
+  }, [isFocused]);
+
+  useEffect(() => {
+    if (!isFocused || entryChallengeHandledRef.current || !authHydrated) {
+      return;
+    }
+
+    entryChallengeHandledRef.current = true;
+
+    if (!shouldRequireSecuritySettingsUnlock({ biometricPreferredEnabled, hasSecurityPassword })) {
+      return;
+    }
+
+    let active = true;
+
+    const runEntryChallenge = async () => {
+      const granted = await requestSensitiveAccess({
+        title: '进入安全设置',
+        description: '已开启生物识别与安全密码，进入此页面前需要先验证身份。',
+        cancelable: true,
+      });
+
+      if (!active) {
+        return;
+      }
+
+      if (granted) {
+        markVerified();
+        return;
+      }
+
+      router.back();
+    };
+
+    void runEntryChallenge();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    authHydrated,
+    biometricPreferredEnabled,
+    hasSecurityPassword,
+    isFocused,
+    markVerified,
+    requestSensitiveAccess,
+  ]);
+
+  const promptSetSecurityPassword = async () => {
+    const confirmed = await showConfirm({
+      title: '请先设置安全密码',
+      message: '启动屏幕锁、生物识别优先和敏感操作二次授权都依赖安全密码作为兜底验证方式。',
+      confirmLabel: '去设置',
+    });
+
+    if (confirmed) {
+      router.push('/settings/security-password');
+    }
+  };
+
+  const closePasswordSetupModal = () => {
+    setShowPasswordSetupModal(false);
+    setPendingBiometricEnable(false);
+    setSetupPassword('');
+    setSetupPasswordConfirm('');
+    setSetupSubmitting(false);
+  };
+
+  const enableBiometricPreferred = async () => {
+    const available = await isBiometricAvailable();
+    if (!available) {
+      await showAlert({
+        title: '当前设备不可用',
+        message: '未检测到可用的指纹或面容识别，请先在系统中完成录入。',
+      });
+      return false;
+    }
+
+    updateSetting('biometricPreferredEnabled', true);
+    return true;
+  };
+
+  const openPasswordSetupModal = () => {
+    setPendingBiometricEnable(true);
+    setSetupPassword('');
+    setSetupPasswordConfirm('');
+    setShowPasswordSetupModal(true);
+  };
+
+  const handlePasswordSetupSubmit = async () => {
+    const trimmedPassword = setupPassword.trim();
+    const trimmedConfirmPassword = setupPasswordConfirm.trim();
+
+    if (trimmedPassword.length < 4) {
+      await showAlert({
+        title: '安全密码过短',
+        message: '请至少输入 4 位安全密码。',
+      });
+      return;
+    }
+
+    if (trimmedPassword !== trimmedConfirmPassword) {
+      await showAlert({
+        title: '两次输入不一致',
+        message: '请确认两次输入的安全密码完全一致。',
+      });
+      return;
+    }
+
+    try {
+      setSetupSubmitting(true);
+      await saveSecurityPassword(trimmedPassword);
+      setHasSecurityPassword(true);
+
+      const shouldEnableBiometric = pendingBiometricEnable;
+      closePasswordSetupModal();
+
+      if (shouldEnableBiometric) {
+        await enableBiometricPreferred();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      await showAlert({
+        title: '设置失败',
+        message,
+      });
+      setSetupSubmitting(false);
+    }
   };
 
   const handleToggleLaunchProtection = (value: boolean) => {
     if (value && !hasSecurityPassword) {
-      promptSetSecurityPassword();
+      void promptSetSecurityPassword();
       return;
     }
 
@@ -51,7 +207,7 @@ export default function SecurityScreen() {
 
   const handleToggleSensitiveActionProtection = (value: boolean) => {
     if (value && !hasSecurityPassword) {
-      promptSetSecurityPassword();
+      void promptSetSecurityPassword();
       return;
     }
 
@@ -61,22 +217,24 @@ export default function SecurityScreen() {
   const handleToggleBiometricPreferred = async (value: boolean) => {
     if (value) {
       if (!hasSecurityPassword) {
-        promptSetSecurityPassword();
+        openPasswordSetupModal();
         return;
       }
 
-      const available = await isBiometricAvailable();
-      if (!available) {
-        Alert.alert('当前设备不可用', '未检测到可用的指纹或面容识别，请先在系统中完成录入。');
+      const enabled = await enableBiometricPreferred();
+      if (!enabled) {
         return;
       }
+
+      return;
     }
 
     updateSetting('biometricPreferredEnabled', value);
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <>
+      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <SectionTitle label="安全密码" />
       <View style={[styles.card, { backgroundColor: colors.card }]}>
         <TouchableOpacity style={styles.optionRow} onPress={() => router.push('/settings/security-password')}>
@@ -126,6 +284,48 @@ export default function SecurityScreen() {
             trackColor={{ false: colors.border, true: colors.accent }}
           />
         </View>
+      </View>
+
+      <SectionTitle label="二次验证模式" />
+      <View style={[styles.card, { backgroundColor: colors.card }]}>
+        {SENSITIVE_ACTION_MODE_OPTIONS.map((option, index) => {
+          const selected = sensitiveActionMode === option.value;
+          return (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionRow,
+                index < SENSITIVE_ACTION_MODE_OPTIONS.length - 1 && {
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: colors.border,
+                },
+              ]}
+              onPress={() => updateSetting('sensitiveActionMode', option.value)}
+              disabled={!sensitiveActionProtectionEnabled}
+            >
+              <View style={styles.optionText}>
+                <Text
+                  style={[
+                    styles.optionLabel,
+                    { color: sensitiveActionProtectionEnabled ? colors.text : colors.textTertiary },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
+                  {option.description}
+                </Text>
+              </View>
+              {selected ? (
+                <Ionicons
+                  name="checkmark"
+                  size={20}
+                  color={sensitiveActionProtectionEnabled ? colors.accent : colors.textTertiary}
+                />
+              ) : null}
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <SectionTitle label="生物识别优先" />
@@ -185,15 +385,93 @@ export default function SecurityScreen() {
         })}
       </View>
 
-      <View style={[styles.noteCard, { backgroundColor: colors.accentLight }]}>
-        <Ionicons name="shield-checkmark-outline" size={18} color={colors.accent} />
-        <Text style={[styles.noteText, { color: colors.textSecondary }]}>
-          SSH 密码、私钥和安全密码都保存在设备安全存储中。当前版本会优先使用生物识别验证，用户取消或失败后自动回退到安全密码输入。
-        </Text>
-      </View>
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
 
-      <View style={styles.bottomSpacer} />
-    </ScrollView>
+      <Modal
+        visible={showPasswordSetupModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closePasswordSetupModal}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={closePasswordSetupModal} />
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Card style={[styles.passwordModalCard, { backgroundColor: colors.cardElevated, borderColor: colors.borderLight }]}>
+            <Text style={[styles.passwordModalTitle, { color: colors.text }]}>设置安全密码</Text>
+            <Text style={[styles.passwordModalDescription, { color: colors.textSecondary }]}>
+              开启生物识别前需要先设置安全密码，验证失败时会自动回退到这里。
+            </Text>
+
+            <View style={styles.passwordField}>
+              <Text style={[styles.passwordFieldLabel, { color: colors.text }]}>安全密码</Text>
+              <TextInput
+                style={[
+                  styles.passwordInput,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
+                value={setupPassword}
+                onChangeText={setSetupPassword}
+                placeholder="建议至少 4 位"
+                placeholderTextColor={colors.textTertiary}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.passwordField}>
+              <Text style={[styles.passwordFieldLabel, { color: colors.text }]}>确认安全密码</Text>
+              <TextInput
+                style={[
+                  styles.passwordInput,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
+                value={setupPasswordConfirm}
+                onChangeText={setSetupPasswordConfirm}
+                placeholder="再次输入安全密码"
+                placeholderTextColor={colors.textTertiary}
+                secureTextEntry
+                autoCapitalize="none"
+                onSubmitEditing={() => void handlePasswordSetupSubmit()}
+              />
+            </View>
+
+            <View style={styles.passwordModalActions}>
+              <TouchableOpacity
+                style={[styles.passwordSecondaryButton, { borderColor: colors.border }]}
+                onPress={closePasswordSetupModal}
+                disabled={setupSubmitting}
+              >
+                <Text style={[styles.passwordSecondaryButtonText, { color: colors.textSecondary }]}>取消</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.passwordPrimaryButton,
+                  { backgroundColor: colors.accent, opacity: setupSubmitting ? 0.7 : 1 },
+                ]}
+                onPress={() => void handlePasswordSetupSubmit()}
+                disabled={setupSubmitting}
+              >
+                <Text style={[styles.passwordPrimaryButtonText, { color: colors.accentText }]}>
+                  {setupSubmitting ? '设置中...' : '设置并启用'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -250,22 +528,75 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     gap: Spacing.md,
   },
+  optionText: {
+    flex: 1,
+  },
   optionLabel: {
     ...Typography.body,
+  },
+  optionDescription: {
+    ...Typography.caption,
+    marginTop: 2,
+  },
+  modalOverlay: {
     flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xl,
   },
-  noteCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.xl,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  noteText: {
+  passwordModalCard: {
+    gap: Spacing.md,
+  },
+  passwordModalTitle: {
+    ...Typography.h3,
+  },
+  passwordModalDescription: {
+    ...Typography.body,
+  },
+  passwordField: {
+    gap: Spacing.xs,
+  },
+  passwordFieldLabel: {
     ...Typography.bodySmall,
+    fontWeight: '600',
+  },
+  passwordInput: {
+    ...Typography.body,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+  },
+  passwordModalActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  passwordSecondaryButton: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+  },
+  passwordSecondaryButtonText: {
+    ...Typography.bodySmall,
+    fontWeight: '700',
+  },
+  passwordPrimaryButton: {
     flex: 1,
+    minHeight: 44,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+  },
+  passwordPrimaryButtonText: {
+    ...Typography.bodySmall,
+    fontWeight: '700',
   },
   bottomSpacer: { height: Spacing.xxl },
 });

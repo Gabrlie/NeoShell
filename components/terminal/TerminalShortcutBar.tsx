@@ -1,8 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
 
 import { useTheme } from '@/hooks';
+import { resolveTerminalAppearance } from '@/services';
 import type { TerminalModifierState, TerminalShortcutKey } from '@/services/terminalInput';
 import { TERMINAL_SHORTCUT_ROWS } from '@/services/terminalInput';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 
 interface TerminalShortcutBarProps {
@@ -29,9 +31,16 @@ const SHORTCUT_LABELS: Record<TerminalShortcutKey, string> = {
 
 export function TerminalShortcutBar({ modifiers, onPressShortcut }: TerminalShortcutBarProps) {
   const { colors } = useTheme();
+  const terminalTheme = useSettingsStore((state) => state.terminalTheme);
+  const systemScheme = useColorScheme();
+  const terminalAppearance = resolveTerminalAppearance({
+    terminalTheme,
+    systemColorScheme: systemScheme === 'dark' ? 'dark' : 'light',
+    accent: colors.accent,
+  });
 
   return (
-    <View style={[styles.container, { backgroundColor: '#000000' }]}>
+    <View style={[styles.container, { backgroundColor: terminalAppearance.toolbarBackground }]}>
       {TERMINAL_SHORTCUT_ROWS.map((row, rowIndex) => (
         <View key={rowIndex} style={styles.row}>
           {row.map((key) => {
@@ -45,8 +54,10 @@ export function TerminalShortcutBar({ modifiers, onPressShortcut }: TerminalShor
                   styles.keyButton,
                   {
                     backgroundColor: isActive 
-                      ? colors.accent + '25' 
-                      : pressed ? '#ffffff1A' : 'transparent',
+                      ? colors.accent + '25'
+                      : pressed
+                        ? terminalAppearance.selection
+                        : 'transparent',
                   },
                 ]}
               >
@@ -55,7 +66,9 @@ export function TerminalShortcutBar({ modifiers, onPressShortcut }: TerminalShor
                     style={[
                       styles.keyText, 
                       { 
-                        color: isActive ? colors.accent : (pressed ? '#FFFFFF' : '#E8ECF4'),
+                        color: isActive
+                          ? colors.accent
+                          : (pressed ? terminalAppearance.foreground : terminalAppearance.foreground),
                       }
                     ]}
                   >

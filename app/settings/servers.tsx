@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,12 +8,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { Stack, router } from 'expo-router';
 
 import { Badge, Card } from '@/components/ui';
+import { OSIcon } from '@/components/monitor/OSIcon';
 import { useTheme } from '@/hooks';
 import { useSensitiveActionAccess } from '@/hooks/useSensitiveActionAccess';
-import { disconnectServer, testSSHConnection } from '@/services';
+import { disconnectServer, showAlert, showConfirm } from '@/services';
 import { useMonitorStore, useServerStore } from '@/stores';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 import type { ServerConfig } from '@/types';
@@ -43,60 +43,44 @@ export default function ServerManagementScreen() {
       return;
     }
 
-    Alert.alert(
-      '删除服务器',
-      `确认删除「${server.name}」吗？此操作不可撤销，关联的密码也会一并清除。`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '删除',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await disconnectServer(server.id);
-              useMonitorStore.getState().clearServerData(server.id);
-              await removeServer(server.id);
-            } catch {
-              Alert.alert('删除失败', '请稍后重试。');
-            }
-          },
-        },
-      ]
-    );
-  };
+    const confirmed = await showConfirm({
+      title: '删除服务器',
+      message: `确认删除「${server.name}」吗？此操作不可撤销，关联的密码也会一并清除。`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
 
-  const handleTestConnection = async (server: ServerConfig) => {
-    if (server.dataSource !== 'ssh') {
-      Alert.alert('提示', '演示服务器不支持连接测试。');
+    if (!confirmed) {
       return;
     }
 
     try {
-      const result = await testSSHConnection(server);
-      Alert.alert('测试成功', result.message);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '未知错误';
-      Alert.alert('测试失败', message);
+      await disconnectServer(server.id);
+      useMonitorStore.getState().clearServerData(server.id);
+      await removeServer(server.id);
+    } catch {
+      await showAlert({
+        title: '删除失败',
+        message: '请稍后重试。',
+      });
     }
+  };
+
+  const handleOpenTestPage = (server: ServerConfig) => {
+    router.push({ pathname: '/server/[id]/test', params: { id: server.id } });
   };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={[styles.title, { color: colors.text }]}>服务器管理</Text>
-          <Text style={[styles.desc, { color: colors.textSecondary }]}>
-            统一管理已保存服务器，可直接新增、编辑、测试连接和删除。
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: colors.accent }]}
-          onPress={() => router.push('/modal')}
-        >
-          <Ionicons name="add" size={18} color={colors.accentText} />
-          <Text style={[styles.addButtonText, { color: colors.accentText }]}>新增</Text>
-        </TouchableOpacity>
-      </View>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <TouchableOpacity style={styles.headerAction} onPress={() => router.push('/modal')}>
+              <Ionicons name="add" size={20} color={colors.accent} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       <View style={styles.list}>
         {!isHydrated || isHydrating ? (
@@ -122,38 +106,26 @@ export default function ServerManagementScreen() {
                     {server.username}@{server.host}:{server.port}
                   </Text>
                 </View>
-                <Ionicons
-                  name={server.dataSource === 'ssh' ? 'server-outline' : 'flask-outline'}
-                  size={20}
-                  color={server.dataSource === 'ssh' ? colors.accent : colors.textTertiary}
-                />
+                <OSIcon os={server.osType} size={20} color={colors.accent} />
               </View>
 
               <View style={styles.badgeRow}>
-                <Badge label={server.dataSource === 'ssh' ? 'SSH' : 'Mock'} variant="info" />
+                <Badge label="SSH" variant="info" />
                 <Badge
-                  label={
-                    server.dataSource === 'ssh'
-                      ? server.authMethod === 'password'
-                        ? '密码认证'
-                        : '私钥认证'
-                      : '演示数据'
-                  }
+                  label={server.authMethod === 'password' ? '密码认证' : '私钥认证'}
                   variant={server.authMethod === 'key' ? 'warning' : 'default'}
                 />
                 {server.group ? <Badge label={server.group} /> : null}
               </View>
 
               <View style={styles.actionRow}>
-                {server.dataSource === 'ssh' ? (
-                  <ActionButton
-                    label="测试连接"
-                    icon="pulse-outline"
-                    borderColor={colors.accent}
-                    textColor={colors.accent}
-                    onPress={() => void handleTestConnection(server)}
-                  />
-                ) : null}
+                <ActionButton
+                  label="测试"
+                  icon="pulse-outline"
+                  borderColor={colors.accent}
+                  textColor={colors.accent}
+                  onPress={() => handleOpenTestPage(server)}
+                />
                 <ActionButton
                   label="编辑"
                   icon="create-outline"
@@ -202,35 +174,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-  },
-  headerText: {
-    flex: 1,
-  },
-  title: {
-    ...Typography.h2,
-  },
-  desc: {
-    ...Typography.body,
-    marginTop: Spacing.xs,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    height: 36,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.xs,
-    alignSelf: 'flex-start',
-  },
-  addButtonText: {
-    ...Typography.bodySmall,
-    fontWeight: '700',
+  headerAction: {
+    paddingHorizontal: Spacing.xs,
   },
   list: {
     padding: Spacing.lg,

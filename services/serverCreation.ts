@@ -22,7 +22,7 @@ export async function createServerWithCredentials({
   savePassword,
   deletePassword,
 }: CreateServerWithCredentialsOptions): Promise<string> {
-  const needsPasswordStorage = draft.dataSource === 'ssh' && draft.authMethod === 'password';
+  const needsPasswordStorage = draft.authMethod === 'password';
   let reservedServerId: string | undefined;
 
   if (needsPasswordStorage) {

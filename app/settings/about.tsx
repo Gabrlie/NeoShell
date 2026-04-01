@@ -1,100 +1,109 @@
-/**
- * 关于页
- * 应用信息、技术栈、许可证
- */
-
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 
 import { useTheme } from '@/hooks/useTheme';
+import {
+  APP_AUTHOR_GITHUB_URL,
+  APP_LICENSE_NAME,
+  APP_LICENSE_SUMMARY,
+  APP_NAME,
+  APP_REPOSITORY_URL,
+  APP_TAGLINE,
+  TECH_STACK,
+} from '@/services';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
-const SDK_VERSION = Constants.expoConfig?.sdkVersion ?? 'N/A';
-
-const TECH_STACK = [
-  { label: '框架', value: `Expo SDK ${SDK_VERSION}` },
-  { label: '语言', value: 'TypeScript (strict)' },
-  { label: '路由', value: 'Expo Router v4' },
-  { label: '状态管理', value: 'Zustand' },
-  { label: 'SSH/SFTP', value: 'react-native-ssh-sftp' },
-  { label: '终端', value: 'xterm.js + WebView' },
-  { label: '图表', value: 'react-native-svg' },
-];
+const SDK_VERSION = Constants.expoConfig?.sdkVersion ?? '55.0.0';
 
 const LINKS = [
   {
+    icon: 'person-circle-outline' as const,
+    label: '作者 GitHub',
+    subtitle: 'github.com/Gabrlie',
+    url: APP_AUTHOR_GITHUB_URL,
+  },
+  {
     icon: 'logo-github' as const,
     label: 'GitHub 仓库',
-    url: 'https://github.com',
+    subtitle: 'github.com/gabrlie/neoshell',
+    url: APP_REPOSITORY_URL,
   },
 ];
 
 export default function AboutScreen() {
   const { colors } = useTheme();
+  const resolvedTechStack = TECH_STACK.map((item) =>
+    item.label === '框架' ? { ...item, value: `Expo SDK ${SDK_VERSION}` } : item,
+  );
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* 应用标识 */}
       <View style={styles.hero}>
         <View style={[styles.appIconContainer, { backgroundColor: colors.accent }]}>
           <Ionicons name="terminal" size={36} color={colors.accentText} />
         </View>
-        <Text style={[styles.appName, { color: colors.text }]}>NeoShell</Text>
-        <Text style={[styles.appVersion, { color: colors.textSecondary }]}>
-          版本 {APP_VERSION}
-        </Text>
-        <Text style={[styles.appTagline, { color: colors.textTertiary }]}>
-          移动端服务器监控与管理工具
-        </Text>
+        <Text style={[styles.appName, { color: colors.text }]}>{APP_NAME}</Text>
+        <View style={[styles.appVersionBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.appVersion, { color: colors.text }]}>版本 {APP_VERSION}</Text>
+        </View>
+        <Text style={[styles.appTagline, { color: colors.textTertiary }]}>{APP_TAGLINE}</Text>
       </View>
 
-      {/* 技术栈 */}
       <SectionTitle label="技术栈" />
       <View style={[styles.card, { backgroundColor: colors.card }]}>
-        {TECH_STACK.map((item, index) => (
+        {resolvedTechStack.map((item, index) => (
           <View
             key={item.label}
             style={[
               styles.infoRow,
-              index < TECH_STACK.length - 1 && {
+              index < resolvedTechStack.length - 1 && {
                 borderBottomWidth: StyleSheet.hairlineWidth,
                 borderBottomColor: colors.border,
               },
             ]}
           >
             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{item.label}</Text>
-            <Text style={[styles.infoValue, { color: colors.text }]}>{item.value}</Text>
+            <Text style={[styles.infoValue, { color: colors.accent }]}>{item.value}</Text>
           </View>
         ))}
       </View>
 
-      {/* 链接 */}
       <SectionTitle label="链接" />
       <View style={[styles.card, { backgroundColor: colors.card }]}>
-        {LINKS.map((link) => (
+        {LINKS.map((link, index) => (
           <TouchableOpacity
             key={link.label}
-            style={styles.linkRow}
+            style={[
+              styles.linkRow,
+              index < LINKS.length - 1 && {
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: colors.border,
+              },
+            ]}
             onPress={() => void Linking.openURL(link.url)}
           >
             <Ionicons name={link.icon} size={22} color={colors.accent} />
-            <Text style={[styles.linkLabel, { color: colors.text }]}>{link.label}</Text>
+            <View style={styles.linkContent}>
+              <Text style={[styles.linkLabel, { color: colors.text }]}>{link.label}</Text>
+              <Text style={[styles.linkSubtitle, { color: colors.textSecondary }]}>{link.subtitle}</Text>
+            </View>
             <Ionicons name="open-outline" size={16} color={colors.textTertiary} />
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* 许可证 */}
       <SectionTitle label="许可证" />
       <View style={[styles.card, { backgroundColor: colors.card }]}>
         <Text style={[styles.licenseText, { color: colors.textSecondary }]}>
-          本项目采用 MIT 许可证。使用的第三方库各自遵循其许可证条款。
+          {APP_LICENSE_NAME}
+        </Text>
+        <Text style={[styles.licenseDetail, { color: colors.textSecondary }]}>
+          {APP_LICENSE_SUMMARY}
         </Text>
       </View>
 
-      {/* 底部 */}
       <Text style={[styles.footer, { color: colors.textTertiary }]}>
         用 ❤️ 构建于 Expo + React Native
       </Text>
@@ -106,9 +115,7 @@ export default function AboutScreen() {
 
 function SectionTitle({ label }: { label: string }) {
   const { colors } = useTheme();
-  return (
-    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{label}</Text>
-  );
+  return <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{label}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -130,8 +137,15 @@ const styles = StyleSheet.create({
     ...Typography.h1,
   },
   appVersion: {
-    ...Typography.body,
+    ...Typography.bodySmall,
+    fontWeight: '700',
+  },
+  appVersionBadge: {
     marginTop: Spacing.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
   },
   appTagline: {
     ...Typography.bodySmall,
@@ -154,17 +168,22 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
+    gap: Spacing.md,
   },
   infoLabel: {
     ...Typography.bodySmall,
+    width: 64,
+    paddingTop: 2,
   },
   infoValue: {
+    flex: 1,
     ...Typography.bodySmall,
-    fontWeight: '600',
+    fontWeight: '700',
+    textAlign: 'right',
+    flexShrink: 1,
   },
   linkRow: {
     flexDirection: 'row',
@@ -173,13 +192,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     gap: Spacing.md,
   },
-  linkLabel: {
-    ...Typography.body,
+  linkContent: {
     flex: 1,
   },
+  linkLabel: {
+    ...Typography.body,
+  },
+  linkSubtitle: {
+    ...Typography.bodySmall,
+    marginTop: 2,
+  },
   licenseText: {
+    ...Typography.body,
+    fontWeight: '700',
+    paddingHorizontal: Spacing.sm,
+  },
+  licenseDetail: {
     ...Typography.bodySmall,
     paddingHorizontal: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   footer: {
     ...Typography.caption,

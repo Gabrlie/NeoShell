@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,6 +12,7 @@ import {
 
 import { Card } from '@/components/ui';
 import { useTheme } from '@/hooks';
+import { showAlert } from '@/services';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 
 interface PrivateKeyFormValues {
@@ -55,12 +55,18 @@ export function PrivateKeyForm({
     const trimmedPassphrase = passphrase.trim();
 
     if (!trimmedName || !trimmedKey) {
-      Alert.alert('信息不完整', '请填写私钥名称并粘贴私钥正文。');
+      await showAlert({
+        title: '信息不完整',
+        message: '请填写私钥名称并粘贴私钥正文。',
+      });
       return;
     }
 
     if (!trimmedKey.includes('BEGIN') || !trimmedKey.includes('PRIVATE KEY')) {
-      Alert.alert('私钥格式异常', '当前内容看起来不像标准私钥，请检查粘贴内容是否完整。');
+      await showAlert({
+        title: '私钥格式异常',
+        message: '当前内容看起来不像标准私钥，请检查粘贴内容是否完整。',
+      });
       return;
     }
 
@@ -72,7 +78,10 @@ export function PrivateKeyForm({
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : '未知错误';
-      Alert.alert('保存失败', message);
+      await showAlert({
+        title: '保存失败',
+        message,
+      });
     }
   };
 

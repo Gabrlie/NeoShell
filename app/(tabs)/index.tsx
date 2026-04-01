@@ -6,7 +6,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -26,7 +25,7 @@ import { useSensitiveActionAccess } from '@/hooks/useSensitiveActionAccess';
 import { useServerMonitoring } from '@/hooks/useServerMonitoring';
 import { useTheme } from '@/hooks/useTheme';
 import { toServerCardData } from '@/services/monitorMappers';
-import { disconnectServer, runServerPowerAction, testSSHConnection } from '@/services';
+import { disconnectServer, runServerPowerAction, showAlert, showConfirm } from '@/services';
 import { useMonitorStore } from '@/stores/monitorStore';
 import { useServerStore } from '@/stores/serverStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
@@ -92,19 +91,8 @@ export default function HomeScreen() {
     ? servers.find((s) => s.id === activeMenuServerId)
     : null;
 
-  const handleTestConnection = async (server: ServerConfig) => {
-    if (server.dataSource !== 'ssh') {
-      Alert.alert('提示', '演示服务器不支持连接测试。');
-      return;
-    }
-
-    try {
-      const result = await testSSHConnection(server);
-      Alert.alert('测试成功', result.message);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '未知错误';
-      Alert.alert('测试失败', message);
-    }
+  const handleOpenTestPage = (server: ServerConfig) => {
+    router.push({ pathname: '/server/[id]/test', params: { id: server.id } });
   };
 
   const handleEditServer = (server: ServerConfig) => {
@@ -120,70 +108,67 @@ export default function HomeScreen() {
       return;
     }
 
-    Alert.alert(
-      '删除服务器',
-      `确认删除「${server.name}」吗？此操作不可撤销，关联的密码也会一并清除。`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '删除',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await disconnectServer(server.id);
-              useMonitorStore.getState().clearServerData(server.id);
-              await removeServer(server.id);
-            } catch {
-              Alert.alert('删除失败', '请稍后重试。');
-            }
-          },
-        },
-      ]
-    );
-  };
+    const confirmed = await showConfirm({
+      title: '删除服务器',
+      message: `确认删除「${server.name}」吗？此操作不可撤销，关联的密码也会一并清除。`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
 
-  const handlePowerAction = (server: ServerConfig, action: 'restart' | 'shutdown') => {
-    if (server.dataSource !== 'ssh') {
-      Alert.alert('提示', '演示服务器不支持电源操作。');
+    if (!confirmed) {
       return;
     }
 
+    try {
+      await disconnectServer(server.id);
+      useMonitorStore.getState().clearServerData(server.id);
+      await removeServer(server.id);
+    } catch {
+      await showAlert({
+        title: '删除失败',
+        message: '请稍后重试。',
+      });
+    }
+  };
+
+  const handlePowerAction = async (server: ServerConfig, action: 'restart' | 'shutdown') => {
     const actionLabel = action === 'restart' ? '重启' : '关机';
     const title = action === 'restart' ? '重启服务器' : '关闭服务器';
 
-    Alert.alert(
+    const confirmed = await showConfirm({
       title,
-      `确认对「${server.name}」执行${actionLabel}吗？执行后当前 SSH 会话会被断开。`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: actionLabel,
-          style: action === 'shutdown' ? 'destructive' : 'default',
-          onPress: async () => {
-            try {
-              const result = await runServerPowerAction(server, action);
-              useMonitorStore.getState().clearServerData(server.id);
-              setConnectionStatus(server.id, 'disconnected');
-              Alert.alert(`${actionLabel}命令已发送`, result.message);
-            } catch (error) {
-              const message = error instanceof Error ? error.message : '未知错误';
-              Alert.alert(`${actionLabel}失败`, message);
-            }
-          },
-        },
-      ]
-    );
+      message: `确认对「${server.name}」执行${actionLabel}吗？执行后当前 SSH 会话会被断开。`,
+      confirmLabel: actionLabel,
+      destructive: action === 'shutdown',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const result = await runServerPowerAction(server, action);
+      useMonitorStore.getState().clearServerData(server.id);
+      setConnectionStatus(server.id, 'disconnected');
+      await showAlert({
+        title: `${actionLabel}命令已发送`,
+        message: result.message,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      await showAlert({
+        title: `${actionLabel}失败`,
+        message,
+      });
+    }
   };
 
   const buildMenuItems = (server: ServerConfig): ContextMenuItem[] => {
-    const isSSH = server.dataSource === 'ssh';
-
     const items: ContextMenuItem[] = [
       {
         key: 'terminal',
         icon: 'terminal-outline',
         label: '终端',
-        disabled: !isSSH,
         onPress: () => {
           openServerGuardRef.current.run(() => {
             router.push(`/terminal/${server.id}`);
@@ -194,7 +179,6 @@ export default function HomeScreen() {
         key: 'files',
         icon: 'folder-outline',
         label: '文件管理',
-        disabled: !isSSH,
         onPress: () => {
           openServerGuardRef.current.run(() => {
             router.push(`/files/${server.id}`);
@@ -205,7 +189,6 @@ export default function HomeScreen() {
         key: 'docker',
         icon: 'cube-outline',
         label: 'Docker',
-        disabled: !isSSH,
         onPress: () => {
           openServerGuardRef.current.run(() => {
             router.push(`/docker/${server.id}`);
@@ -215,24 +198,21 @@ export default function HomeScreen() {
       {
         key: 'test',
         icon: 'pulse-outline',
-        label: '测试连接',
-        disabled: !isSSH,
-        onPress: () => void handleTestConnection(server),
+        label: '测试',
+        onPress: () => handleOpenTestPage(server),
       },
       {
         key: 'restart',
         icon: 'refresh-outline',
         label: '重启',
-        disabled: !isSSH,
-        onPress: () => handlePowerAction(server, 'restart'),
+        onPress: () => void handlePowerAction(server, 'restart'),
       },
       {
         key: 'shutdown',
         icon: 'power-outline',
         label: '关机',
         destructive: true,
-        disabled: !isSSH,
-        onPress: () => handlePowerAction(server, 'shutdown'),
+        onPress: () => void handlePowerAction(server, 'shutdown'),
       },
       {
         key: 'edit',
@@ -378,7 +358,7 @@ function EmptyState({ hasKeyword }: { hasKeyword: boolean }) {
         {hasKeyword ? '没有匹配的服务器' : '还没有服务器'}
       </Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-        {hasKeyword ? '换个关键字试试，或者清空搜索条件。' : '先添加一台演示服务器，主页和监控详情页就会开始自动刷新数据。'}
+        {hasKeyword ? '换个关键字试试，或者清空搜索条件。' : '先添加一台 SSH 服务器，主页和监控详情页就会开始自动刷新数据。'}
       </Text>
       {!hasKeyword ? (
         <TouchableOpacity

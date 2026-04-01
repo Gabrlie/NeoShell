@@ -54,12 +54,6 @@ export function useTerminalSession(server?: ServerConfig) {
       return;
     }
 
-    if (server.dataSource !== 'ssh') {
-      setStatus('error');
-      setError('Mock 数据源不支持终端，请使用 SSH 服务器。');
-      return;
-    }
-
     let disposed = false;
     let unsubscribe: (() => void) | undefined;
     setStatus('connecting');

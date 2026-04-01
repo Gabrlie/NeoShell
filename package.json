@@ -2,6 +2,7 @@
   "name": "neoshell",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "license": "MIT",
   "scripts": {
     "postinstall": "patch-package",
     "start": "expo start",

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -15,6 +14,9 @@ import { Card } from '@/components/ui';
 import { useTheme } from '@/hooks';
 import {
   clearSecurityPassword,
+  getSecurityPasswordRemovalUpdates,
+  showAlert,
+  showConfirm,
   saveSecurityPassword,
   verifySecurityPassword,
 } from '@/services';
@@ -28,6 +30,8 @@ export default function SecurityPasswordScreen() {
   const setHasSecurityPassword = useAuthStore((state) => state.setHasSecurityPassword);
   const launchProtectionEnabled = useSettingsStore((state) => state.launchProtectionEnabled);
   const sensitiveActionProtectionEnabled = useSettingsStore((state) => state.sensitiveActionProtectionEnabled);
+  const biometricPreferredEnabled = useSettingsStore((state) => state.biometricPreferredEnabled);
+  const updateSetting = useSettingsStore((state) => state.updateSetting);
   const [currentPassword, setCurrentPassword] = useState('');
   const [nextPassword, setNextPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -40,12 +44,18 @@ export default function SecurityPasswordScreen() {
     const trimmedConfirmPassword = confirmPassword.trim();
 
     if (trimmedNextPassword.length < 4) {
-      Alert.alert('安全密码过短', '请至少输入 4 位安全密码。');
+      await showAlert({
+        title: '安全密码过短',
+        message: '请至少输入 4 位安全密码。',
+      });
       return;
     }
 
     if (trimmedNextPassword !== trimmedConfirmPassword) {
-      Alert.alert('两次输入不一致', '请确认两次输入的安全密码完全一致。');
+      await showAlert({
+        title: '两次输入不一致',
+        message: '请确认两次输入的安全密码完全一致。',
+      });
       return;
     }
 
@@ -55,7 +65,10 @@ export default function SecurityPasswordScreen() {
       if (hasSecurityPassword) {
         const verified = await verifySecurityPassword(currentPassword.trim());
         if (!verified) {
-          Alert.alert('当前密码错误', '请输入当前安全密码后再继续。');
+          await showAlert({
+            title: '当前密码错误',
+            message: '请输入当前安全密码后再继续。',
+          });
           return;
         }
       }
@@ -65,10 +78,16 @@ export default function SecurityPasswordScreen() {
       setCurrentPassword('');
       setNextPassword('');
       setConfirmPassword('');
-      Alert.alert('保存成功', hasSecurityPassword ? '安全密码已更新。' : '安全密码已设置。');
+      await showAlert({
+        title: '保存成功',
+        message: hasSecurityPassword ? '安全密码已更新。' : '安全密码已设置。',
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : '未知错误';
-      Alert.alert('保存失败', message);
+      await showAlert({
+        title: '保存失败',
+        message,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -76,36 +95,59 @@ export default function SecurityPasswordScreen() {
 
   const handleClear = async () => {
     if (passwordRemovalBlocked) {
-      Alert.alert('无法关闭', '请先关闭启动屏幕锁和敏感操作二次授权，再移除安全密码。');
+      await showAlert({
+        title: '无法关闭',
+        message: '请先关闭启动屏幕锁和敏感操作二次授权，再移除安全密码。',
+      });
       return;
     }
 
     const verified = await verifySecurityPassword(currentPassword.trim());
     if (!verified) {
-      Alert.alert('当前密码错误', '请输入当前安全密码后再继续。');
+      await showAlert({
+        title: '当前密码错误',
+        message: '请输入当前安全密码后再继续。',
+      });
       return;
     }
 
-    Alert.alert('关闭安全密码', '确认移除当前安全密码吗？移除后将无法作为生物识别失败时的兜底验证。', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '确认关闭',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await clearSecurityPassword();
-            setHasSecurityPassword(false);
-            setCurrentPassword('');
-            setNextPassword('');
-            setConfirmPassword('');
-            Alert.alert('已关闭', '安全密码已移除。');
-          } catch (error) {
-            const message = error instanceof Error ? error.message : '未知错误';
-            Alert.alert('关闭失败', message);
-          }
-        },
-      },
-    ]);
+    const confirmed = await showConfirm({
+      title: '关闭安全密码',
+      message: '确认移除当前安全密码吗？移除后将无法作为生物识别失败时的兜底验证。',
+      confirmLabel: '确认关闭',
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await clearSecurityPassword();
+      const removalUpdates = getSecurityPasswordRemovalUpdates({
+        biometricPreferredEnabled,
+      });
+      if (removalUpdates.biometricPreferredEnabled === false) {
+        updateSetting('biometricPreferredEnabled', false);
+      }
+      setHasSecurityPassword(false);
+      setCurrentPassword('');
+      setNextPassword('');
+      setConfirmPassword('');
+      await showAlert({
+        title: '已关闭',
+        message:
+          removalUpdates.biometricPreferredEnabled === false
+            ? '安全密码已移除，生物识别优先已同步关闭。'
+            : '安全密码已移除。',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误';
+      await showAlert({
+        title: '关闭失败',
+        message,
+      });
+    }
   };
 
   return (
@@ -114,13 +156,6 @@ export default function SecurityPasswordScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.title, { color: colors.text }]}>
-          {hasSecurityPassword ? '修改安全密码' : '设置安全密码'}
-        </Text>
-        <Text style={[styles.desc, { color: colors.textSecondary }]}>
-          安全密码会在生物识别取消、失败或不可用时作为本地兜底验证方式，后续也可用于备份加密等能力。
-        </Text>
-
         <Card style={styles.formCard}>
           {hasSecurityPassword ? (
             <PasswordField
@@ -228,14 +263,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: Spacing.xl,
-  },
-  title: {
-    ...Typography.h2,
-    marginBottom: Spacing.md,
-  },
-  desc: {
-    ...Typography.body,
-    marginBottom: Spacing.lg,
   },
   formCard: {
     gap: Spacing.md,

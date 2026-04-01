@@ -1,6 +1,6 @@
 import type { ServerConfig } from '@/types';
 
-import { createSSHClient, normalizeSSHError } from './ssh';
+import { createSSHClient, normalizeSSHError, withSSHTimeout } from './ssh';
 import type { SSHNativeClient } from './sshNative';
 
 type TerminalOutputListener = (chunk: string) => void;
@@ -89,7 +89,7 @@ export async function createTerminalSession(server: ServerConfig): Promise<Termi
   const session = new SSHInteractiveTerminalSession(client);
 
   try {
-    const response = await client.startShell('xterm');
+    const response = await withSSHTimeout(client.startShell('xterm'), '终端会话启动');
     const initialChunk = typeof response === 'string' ? response : String(response ?? '');
     if (initialChunk) {
       session.pushChunk(initialChunk);

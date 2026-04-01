@@ -1,11 +1,15 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Asset } from 'expo-asset';
 
 import { useTheme } from '@/hooks';
-import { resolveTerminalWebViewModule } from '@/services';
+import { resolveTerminalAppearance, resolveTerminalFontProfile, resolveTerminalWebViewModule } from '@/services';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { BorderRadius, Spacing, Typography } from '@/theme';
 
 import { buildTerminalHtml } from './terminalHtml';
+
+const JETBRAINS_MONO_ASSET = require('../../assets/fonts/JetBrainsMono-Regular.ttf');
 
 interface TerminalMessage {
   type: 'ready' | 'input' | 'focus' | 'plainText' | 'longpress';
@@ -39,19 +43,93 @@ export interface TerminalWebViewRef {
 
 export const TerminalWebView = forwardRef<TerminalWebViewRef, TerminalWebViewProps>(
   function TerminalWebView({ onInput, onReady, onFocusRequest, onPlainText, onLongPress, unavailableMessage }, ref) {
-    const { colors, isDark } = useTheme();
+    const { colors } = useTheme();
+    const systemScheme = useColorScheme();
+    const terminalTheme = useSettingsStore((state) => state.terminalTheme);
+    const terminalFontSize = useSettingsStore((state) => state.terminalFontSize);
+    const terminalFontFamily = useSettingsStore((state) => state.terminalFontFamily);
     const webViewRef = useRef<{ injectJavaScript?: (script: string) => void } | null>(null);
     const webViewModule = useMemo(() => resolveTerminalWebViewModule(), []);
     const WebView = webViewModule?.WebView as React.ComponentType<Record<string, unknown>> | undefined;
+    const [fontFaceCss, setFontFaceCss] = useState<string>();
+    const normalizedSystemScheme = systemScheme === 'dark' ? 'dark' : 'light';
+    const terminalAppearance = useMemo(
+      () =>
+        resolveTerminalAppearance({
+          terminalTheme,
+          systemColorScheme: normalizedSystemScheme,
+          accent: colors.accent,
+        }),
+      [colors.accent, normalizedSystemScheme, terminalTheme],
+    );
+    const terminalFontProfile = useMemo(
+      () => resolveTerminalFontProfile(terminalFontFamily),
+      [terminalFontFamily],
+    );
+
+    useEffect(() => {
+      let active = true;
+
+      if (terminalFontProfile.value !== 'jetbrains-mono') {
+        setFontFaceCss(undefined);
+        return () => {
+          active = false;
+        };
+      }
+
+      const loadFontFace = async () => {
+        try {
+          const asset = Asset.fromModule(JETBRAINS_MONO_ASSET);
+          if (!asset.localUri) {
+            await asset.downloadAsync();
+          }
+
+          const assetUri = asset.localUri ?? asset.uri;
+          if (!active) {
+            return;
+          }
+
+          setFontFaceCss(
+            `@font-face { font-family: "NeoShellJetBrainsMono"; src: url("${assetUri}") format("truetype"); font-display: swap; }`,
+          );
+        } catch {
+          if (active) {
+            setFontFaceCss(undefined);
+          }
+        }
+      };
+
+      void loadFontFace();
+
+      return () => {
+        active = false;
+      };
+    }, [terminalFontProfile.value]);
+
     const html = useMemo(
       () =>
         buildTerminalHtml({
-          background: isDark ? '#05070D' : '#0B1020',
-          foreground: '#E6EDF7',
-          cursor: colors.accent,
-          selection: 'rgba(129, 140, 248, 0.28)',
+          background: terminalAppearance.background,
+          foreground: terminalAppearance.foreground,
+          cursor: terminalAppearance.cursor,
+          selection: terminalAppearance.selection,
+          fontSize: terminalFontSize,
+          fontFamily: terminalFontProfile.xtermFontFamily,
+          fontFaceCss,
+          fontStylesheetUrl: terminalFontProfile.fontStylesheetUrl,
+          letterSpacing: terminalFontProfile.letterSpacing,
         }),
-      [colors.accent, isDark],
+      [
+        fontFaceCss,
+        terminalAppearance.background,
+        terminalAppearance.cursor,
+        terminalAppearance.foreground,
+        terminalAppearance.selection,
+        terminalFontProfile.fontStylesheetUrl,
+        terminalFontProfile.letterSpacing,
+        terminalFontProfile.xtermFontFamily,
+        terminalFontSize,
+      ],
     );
 
     const inject = (script: string) => {
@@ -124,9 +202,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewRef, TerminalWebViewPro
 
     if (!WebView) {
       return (
-        <View style={[styles.unavailable, { backgroundColor: isDark ? '#05070D' : '#0B1020' }]}>
-          <Text style={[styles.unavailableTitle, { color: '#E6EDF7' }]}>终端渲染模块不可用</Text>
-          <Text style={[styles.unavailableDesc, { color: 'rgba(230, 237, 247, 0.72)' }]}>
+        <View style={[styles.unavailable, { backgroundColor: terminalAppearance.background }]}>
+          <Text style={[styles.unavailableTitle, { color: terminalAppearance.foreground }]}>终端渲染模块不可用</Text>
+          <Text style={[styles.unavailableDesc, { color: terminalAppearance.muted }]}>
             {unavailableMessage ?? '当前安装包未包含 WebView 原生模块，请重新安装最新开发包。'}
           </Text>
         </View>
@@ -147,6 +225,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewRef, TerminalWebViewPro
         automaticallyAdjustContentInsets={false}
         setSupportMultipleWindows={false}
         keyboardDisplayRequiresUserAction={false}
+        textInteractionEnabled={false}
       />
     );
   },

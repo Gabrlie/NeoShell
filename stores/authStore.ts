@@ -14,12 +14,14 @@ interface AuthStore {
   isHydrating: boolean;
   isAppLocked: boolean;
   lastBackgroundAt: number | null;
+  lastVerifiedAt: number | null;
   sensitiveChallenge: SensitiveChallengeState | null;
 
   hydrateSecurityState: () => Promise<void>;
   setHasSecurityPassword: (configured: boolean) => void;
   lockApp: () => void;
   unlockApp: () => void;
+  markVerified: (timestamp?: number) => void;
   markBackgrounded: (timestamp?: number) => void;
   clearBackgroundMarker: () => void;
   requestSensitiveAccess: (payload: SensitiveChallengeState) => Promise<boolean>;
@@ -34,6 +36,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   isHydrating: false,
   isAppLocked: false,
   lastBackgroundAt: null,
+  lastVerifiedAt: null,
   sensitiveChallenge: null,
 
   hydrateSecurityState: async () => {
@@ -60,6 +63,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   unlockApp: () => {
     set({ isAppLocked: false, lastBackgroundAt: null });
+  },
+
+  markVerified: (timestamp = Date.now()) => {
+    set({ lastVerifiedAt: timestamp });
   },
 
   markBackgrounded: (timestamp = Date.now()) => {

@@ -49,10 +49,7 @@ export default function TerminalEntryScreen() {
     };
   }, []);
 
-  const sshServers = useMemo(
-    () => servers.filter((server) => server.dataSource === 'ssh'),
-    [servers],
-  );
+  const sshServers = useMemo(() => servers, [servers]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -108,7 +105,7 @@ function TerminalServerCard({
 }) {
   const { colors } = useTheme();
   const systemInfo = useMonitorStore((state) => state.systemInfos[server.id]);
-  const osMeta = getOSVisualMeta(systemInfo?.os);
+  const osMeta = getOSVisualMeta(systemInfo?.os || server.osType);
 
   useServerMonitoring(server, {
     enabled: enabled && !systemInfo,

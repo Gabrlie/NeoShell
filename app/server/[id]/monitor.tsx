@@ -50,8 +50,9 @@ export default function MonitorDetailScreen() {
       snapshot,
       systemInfo,
       history,
+      server,
     });
-  }, [history, snapshot, systemInfo]);
+  }, [history, server, snapshot, systemInfo]);
 
   useServerMonitoring(server, {
     enabled: Boolean(server) && isFocused,
@@ -88,27 +89,20 @@ export default function MonitorDetailScreen() {
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.headerBtn}
-            disabled={server.dataSource !== 'ssh'}
             onPress={() => router.push({ pathname: '/files/[id]', params: { id: server.id } })}
           >
-            <Ionicons
-              name="folder-outline"
-              size={22}
-              color={server.dataSource === 'ssh' ? colors.accent : colors.textTertiary}
-            />
+            <Ionicons name="folder-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerBtn}
-            disabled={server.dataSource !== 'ssh'}
             onPress={() => router.push({ pathname: '/terminal/[id]', params: { id: server.id } })}
           >
-            <Ionicons
-              name="terminal-outline"
-              size={22}
-              color={server.dataSource === 'ssh' ? colors.accent : colors.textTertiary}
-            />
+            <Ionicons name="terminal-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => router.push('/settings/connection')}
+          >
             <Ionicons name="settings-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
         </View>

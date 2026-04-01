@@ -12,8 +12,8 @@ interface UpdateServerWithCredentialsOptions {
   deletePassword: (serverId: string) => Promise<void>;
 }
 
-function usesPasswordAuth(server: Pick<ServerConfig, 'dataSource' | 'authMethod'>): boolean {
-  return server.dataSource === 'ssh' && server.authMethod === 'password';
+function usesPasswordAuth(server: Pick<ServerConfig, 'authMethod'>): boolean {
+  return server.authMethod === 'password';
 }
 
 export async function updateServerWithCredentials({
