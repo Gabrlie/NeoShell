@@ -46,3 +46,10 @@ yarn-error.*
 # local-only project docs
 .ai/
 AGENTS.md
+
+# local-only tests
+tests/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
