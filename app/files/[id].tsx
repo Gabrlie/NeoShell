@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -99,6 +100,7 @@ export default function FileBrowserScreen() {
   const startSelectionDownload = useTransferStore((state) => state.startSelectionDownload);
   const startToast = useTransferStore((state) => (id ? state.startToasts[id] : undefined));
   const dismissStartToast = useTransferStore((state) => state.dismissStartToast);
+  const { width } = useWindowDimensions();
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
@@ -951,63 +953,57 @@ export default function FileBrowserScreen() {
         />
       ) : null}
 
-      {menuVisible ? (
-        <>
-          <Pressable style={styles.screenBackdrop} onPress={() => setMenuVisible(false)} />
-          <Card
-            style={[
-              styles.screenMenuCard,
-              {
-                top: insets.top + 60,
-                backgroundColor: colors.cardElevated,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <MenuAction
-              icon="refresh-outline"
-              label="刷新目录"
-              onPress={() => {
-                setMenuVisible(false);
-                handleRefresh();
-              }}
-            />
-            <MenuAction
-              icon="cloud-upload-outline"
-              label="上传文件"
-              onPress={() => {
-                void handleUploadFile();
-              }}
-            />
-            <MenuAction
-              icon="swap-horizontal-outline"
-              label="传输详情"
-              onPress={() => {
-                setMenuVisible(false);
-                router.push({ pathname: '/files/transfers/[id]', params: { id: server.id } });
-              }}
-            />
-            <MenuAction
-              icon="document-text-outline"
-              label="新建文件"
-              onPress={handleOpenCreateFileDialog}
-            />
-            <MenuAction
-              icon="folder-open-outline"
-              label="新建文件夹"
-              onPress={handleOpenCreateDirectoryDialog}
-            />
-            <MenuAction
-              icon="home-outline"
-              label="回到根目录"
-              onPress={() => {
-                setMenuVisible(false);
-                void openDirectory(server, '/');
-              }}
-            />
-          </Card>
-        </>
-      ) : null}
+      <ContextMenu
+        visible={menuVisible}
+        anchor={{ x: width - 40, y: insets.top + 60, width: 0, height: 0 }}
+        onClose={() => setMenuVisible(false)}
+        items={[
+          {
+            key: 'refresh',
+            icon: 'refresh-outline',
+            label: '刷新目录',
+            onPress: () => {
+              handleRefresh();
+            },
+          },
+          {
+            key: 'upload',
+            icon: 'cloud-upload-outline',
+            label: '上传文件',
+            onPress: () => {
+              void handleUploadFile();
+            },
+          },
+          {
+            key: 'transfers',
+            icon: 'swap-horizontal-outline',
+            label: '传输详情',
+            onPress: () => {
+              router.push({ pathname: '/files/transfers/[id]', params: { id: server?.id } });
+            },
+          },
+          {
+            key: 'new-file',
+            icon: 'document-text-outline',
+            label: '新建文件',
+            onPress: handleOpenCreateFileDialog,
+          },
+          {
+            key: 'new-folder',
+            icon: 'folder-open-outline',
+            label: '新建文件夹',
+            onPress: handleOpenCreateDirectoryDialog,
+          },
+          {
+            key: 'home',
+            icon: 'home-outline',
+            label: '回到根目录',
+            onPress: () => {
+              if (server) void openDirectory(server, '/');
+            },
+          },
+        ]}
+      />
 
       {isLoading ? (
         <View style={[styles.centerState, { backgroundColor: colors.background }]}>

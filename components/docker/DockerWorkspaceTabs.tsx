@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   ScrollView,
   StyleSheet,
   Text,
@@ -89,6 +90,10 @@ export function DockerWorkspaceTabs({
     return dashboard.containers;
   }, [containerFilter, dashboard.containers]);
 
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const [tabBarWidth, setTabBarWidth] = useState(0);
+  const tabWidth = tabBarWidth > 0 ? (tabBarWidth - 8) / TABS.length : 0;
+
   const goToTab = (tab: WorkspaceTabKey) => {
     const index = TABS.findIndex((item) => item.key === tab);
     if (index < 0) {
@@ -104,17 +109,36 @@ export function DockerWorkspaceTabs({
 
   return (
     <View style={styles.container}>
-      <View style={styles.tabBar}>
+      <View
+        style={styles.tabBar}
+        onLayout={(e) => setTabBarWidth(e.nativeEvent.layout.width)}
+      >
+        {tabWidth > 0 ? (
+          <Animated.View
+            style={[
+              styles.tabIndicator,
+              {
+                width: tabWidth,
+                backgroundColor: colors.cardElevated,
+                transform: [
+                  {
+                    translateX: scrollX.interpolate({
+                      inputRange: TABS.map((_, i) => i * width),
+                      outputRange: TABS.map((_, i) => i * tabWidth),
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+        ) : null}
         {TABS.map((tab) => {
           const active = tab.key === activeTab;
 
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[
-                styles.tabButton,
-                active && [styles.tabButtonActive, { backgroundColor: colors.cardElevated }],
-              ]}
+              style={styles.tabButton}
               onPress={() => goToTab(tab.key)}
             >
               <Text
@@ -131,12 +155,17 @@ export function DockerWorkspaceTabs({
         })}
       </View>
 
-      <ScrollView
-        ref={pagerRef}
+      <Animated.ScrollView
+        ref={pagerRef as any}
         horizontal
         pagingEnabled
         nestedScrollEnabled
         showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true }
+        )}
         onMomentumScrollEnd={(event) => {
           const page = Math.round(event.nativeEvent.contentOffset.x / width);
           setActiveTab(TABS[page]?.key ?? 'info');
@@ -299,7 +328,7 @@ export function DockerWorkspaceTabs({
             </Section>
           </ScrollView>
         </Page>
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -374,8 +403,14 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1, // 确保文字永远在指示器之上
   },
-  tabButtonActive: {
+  tabIndicator: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    bottom: 4,
+    borderRadius: BorderRadius.md,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,

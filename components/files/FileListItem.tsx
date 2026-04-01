@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, type GestureResponderEvent } from 'react-native';
+import { View, Text, StyleSheet, Pressable, type GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { Typography, Spacing, BorderRadius } from '@/theme';
@@ -55,45 +55,59 @@ export function FileListItem({ item, onPress, onLongPress }: FileListItemProps) 
   };
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.container,
-        {
-          borderBottomColor: colors.border,
-          backgroundColor: item.selected ? colors.accentLight : 'transparent',
-        },
-      ]}
+    <Pressable
       onPress={onPress}
-      onLongPress={(event) => onLongPress?.(event)}
-      activeOpacity={0.7}
+      onLongPress={onLongPress ? (event) => onLongPress(event) : undefined}
+      delayLongPress={350} // 稍微缩短长按判定，增强响应快感
     >
-      <Ionicons name={getIconName()} size={28} color={getIconColor()} style={styles.icon} />
-      
-      <View style={styles.content}>
-        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-          {item.name}
-        </Text>
-        <View style={styles.details}>
-          <Text style={[styles.detailText, { color: colors.textTertiary }]}>
-            {item.modifiedAt}
-          </Text>
-          <Text style={[styles.detailText, { color: colors.textTertiary }]}>
-            {item.isDirectory ? '--' : item.size}
-          </Text>
-          <Text style={[styles.detailText, { color: colors.textTertiary }]}>
-            {item.permissions}
-          </Text>
-        </View>
-      </View>
+      {({ pressed }) => {
+        let bgColor = 'transparent';
+        if (item.selected) {
+          bgColor = colors.accentLight;
+        } else if (pressed) {
+          bgColor = colors.backgroundSecondary; // 产生被按住的原生高亮
+        }
 
-      {item.selectionMode && !item.isParentLink ? (
-        <Ionicons
-          name={item.selected ? 'checkmark-circle' : 'ellipse-outline'}
-          size={22}
-          color={item.selected ? colors.accent : colors.textTertiary}
-        />
-      ) : null}
-    </TouchableOpacity>
+        return (
+          <View
+            style={[
+              styles.container,
+              {
+                borderBottomColor: colors.border,
+                backgroundColor: bgColor,
+              },
+            ]}
+          >
+            <Ionicons name={getIconName()} size={28} color={getIconColor()} style={styles.icon} />
+      
+            <View style={styles.content}>
+              <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <View style={styles.details}>
+                <Text style={[styles.detailText, { color: colors.textTertiary }]}>
+                  {item.modifiedAt}
+                </Text>
+                <Text style={[styles.detailText, { color: colors.textTertiary }]}>
+                  {item.isDirectory ? '--' : item.size}
+                </Text>
+                <Text style={[styles.detailText, { color: colors.textTertiary }]}>
+                  {item.permissions}
+                </Text>
+              </View>
+            </View>
+
+            {item.selectionMode && !item.isParentLink ? (
+              <Ionicons
+                name={item.selected ? 'checkmark-circle' : 'ellipse-outline'}
+                size={22}
+                color={item.selected ? colors.accent : colors.textTertiary}
+              />
+            ) : null}
+          </View>
+        );
+      }}
+    </Pressable>
   );
 }
 
