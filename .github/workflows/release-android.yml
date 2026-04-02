@@ -145,10 +145,10 @@ jobs:
       - release
 
     steps:
-      - name: Checkout master branch
+      - name: Checkout main branch
         uses: actions/checkout@v4
         with:
-          ref: master
+          ref: main
 
       - name: Download release artifacts
         uses: actions/download-artifact@v4
@@ -168,9 +168,9 @@ jobs:
             --release-url "https://github.com/${{ github.repository }}/releases/tag/${GITHUB_REF_NAME}" \
             --channel production \
             --apk-file "dist/NeoShell-${{ needs.validate.outputs.version }}.apk" \
-            --apk-url "${{ needs.build.outputs.apk_url }}" \
+            --apk-url "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/NeoShell-${{ needs.validate.outputs.version }}.apk" \
             --aab-file "dist/NeoShell-${{ needs.validate.outputs.version }}.aab" \
-            --aab-url "${{ needs.build.outputs.aab_url }}"
+            --aab-url "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/NeoShell-${{ needs.validate.outputs.version }}.aab"
 
       - name: Commit updates manifest
         run: |
@@ -179,4 +179,4 @@ jobs:
           git add updates-manifest.json
           git diff --cached --quiet && exit 0
           git commit -m "chore(release): update public updates manifest for ${GITHUB_REF_NAME}"
-          git push origin master
+          git push origin main

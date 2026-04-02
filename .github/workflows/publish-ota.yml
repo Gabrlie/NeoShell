@@ -11,6 +11,11 @@ on:
         description: 仓库内更新说明文件路径，例如 release-notes/ota/1.0.0/fix-login.md
         required: true
         type: string
+      source_ref:
+        description: 用于发布热更新的 Git ref，例如 main、release/1.0.0 或 v1.0.0
+        required: false
+        default: main
+        type: string
       title:
         description: 可选，自定义热更新标题
         required: false
@@ -28,10 +33,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout master branch
+      - name: Checkout OTA source ref
         uses: actions/checkout@v4
         with:
-          ref: master
+          ref: ${{ github.event.inputs.source_ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -66,6 +71,12 @@ jobs:
           mkdir -p .release
           npx eas-cli update --channel production --platform android --non-interactive --message "${{ steps.meta.outputs.title }}" --json > .release/ota-update.json
 
+      - name: Checkout main branch for public manifest
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: manifest-repo
+
       - name: Update public updates manifest
         run: |
           node ./scripts/release/upsert-updates-manifest.mjs \
@@ -75,13 +86,15 @@ jobs:
             --title "${{ steps.meta.outputs.title }}" \
             --notes-file "${{ steps.meta.outputs.notes_file }}" \
             --channel production \
-            --metadata-file ".release/ota-update.json"
+            --metadata-file ".release/ota-update.json" \
+            --manifest-path "manifest-repo/updates-manifest.json"
 
       - name: Commit updates manifest
+        working-directory: manifest-repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add updates-manifest.json
           git diff --cached --quiet && exit 0
           git commit -m "chore(update): publish ota for ${{ steps.meta.outputs.version }}"
-          git push origin master
+          git push origin main

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = process.cwd();
-const DEFAULT_SOURCE_URL = 'https://raw.githubusercontent.com/gabrlie/neoshell/master/updates-manifest.json';
+const DEFAULT_SOURCE_URL = 'https://raw.githubusercontent.com/gabrlie/neoshell/main/updates-manifest.json';
 
 function parseArgs(argv) {
   const args = {};
