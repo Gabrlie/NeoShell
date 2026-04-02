@@ -54,7 +54,7 @@ export default function TerminalSessionScreen() {
     customCommand?: string;
   }>();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, colorScheme } = useTheme();
   const terminalTheme = useSettingsStore((state) => state.terminalTheme);
   const systemScheme = useColorScheme();
   const servers = useServerStore((state) => state.servers);
@@ -84,6 +84,7 @@ export default function TerminalSessionScreen() {
   const contentContainerMode = getTerminalContentContainerMode(Platform.OS);
   const terminalAppearance = resolveTerminalAppearance({
     terminalTheme,
+    appColorScheme: colorScheme,
     systemColorScheme: systemScheme === 'dark' ? 'dark' : 'light',
     accent: colors.accent,
   });

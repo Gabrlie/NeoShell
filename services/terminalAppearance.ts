@@ -3,6 +3,7 @@ import { Colors, type ColorScheme } from '@/theme/colors';
 
 interface ResolveTerminalAppearanceOptions {
   terminalTheme: TerminalTheme;
+  appColorScheme: ColorScheme;
   systemColorScheme?: ColorScheme | null;
   accent: string;
 }
@@ -20,15 +21,27 @@ export interface TerminalAppearance {
   inlineErrorBackground: string;
 }
 
+export function normalizeTerminalTheme(theme: unknown): TerminalTheme {
+  if (theme === 'theme' || theme === 'system' || theme === 'light' || theme === 'dark') {
+    return theme;
+  }
+
+  return 'theme';
+}
+
 export function resolveTerminalAppearance({
   terminalTheme,
+  appColorScheme,
   systemColorScheme,
   accent,
 }: ResolveTerminalAppearanceOptions): TerminalAppearance {
+  const normalizedTheme = normalizeTerminalTheme(terminalTheme);
   const scheme: ColorScheme =
-    terminalTheme === 'system'
-      ? (systemColorScheme === 'dark' ? 'dark' : 'light')
-      : terminalTheme;
+    normalizedTheme === 'theme'
+      ? appColorScheme
+      : normalizedTheme === 'system'
+        ? (systemColorScheme === 'dark' ? 'dark' : 'light')
+        : normalizedTheme;
   const palette = Colors[scheme];
 
   return {

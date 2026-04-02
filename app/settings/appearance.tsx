@@ -19,13 +19,14 @@ const TERMINAL_THEME_OPTIONS: Array<{
   value: TerminalTheme;
   icon: React.ComponentProps<typeof Ionicons>['name'];
 }> = [
+  { label: '跟随主题', value: 'theme', icon: 'color-palette-outline' },
   { label: '跟随系统', value: 'system', icon: 'phone-portrait-outline' },
   { label: '浅色', value: 'light', icon: 'sunny-outline' },
   { label: '深色', value: 'dark', icon: 'moon-outline' },
 ];
 
 export default function AppearanceScreen() {
-  const { colors } = useTheme();
+  const { colors, colorScheme } = useTheme();
   const systemScheme = useColorScheme();
   const themeMode = useSettingsStore((s) => s.themeMode);
   const terminalTheme = useSettingsStore((s) => s.terminalTheme);
@@ -34,6 +35,7 @@ export default function AppearanceScreen() {
   const updateSetting = useSettingsStore((s) => s.updateSetting);
   const terminalAppearance = resolveTerminalAppearance({
     terminalTheme,
+    appColorScheme: colorScheme,
     systemColorScheme: systemScheme === 'dark' ? 'dark' : 'light',
     accent: colors.accent,
   });

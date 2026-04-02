@@ -135,11 +135,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
           name: android-release-assets
           path: dist/
+
+      - name: Prepare release body
+        run: |
+          node ./scripts/release/prepare-release-body.mjs \
+            --input "${{ needs.validate.outputs.notes_file }}" \
+            --output ".release/release-body.md"
 
       - name: Create GitHub release
         env:
@@ -152,13 +163,13 @@ jobs:
               --clobber
             gh release edit "${GITHUB_REF_NAME}" \
               --title "NeoShell ${{ needs.validate.outputs.version }}" \
-              --notes-file "${{ needs.validate.outputs.notes_file }}"
+              --notes-file ".release/release-body.md"
           else
             gh release create "${GITHUB_REF_NAME}" \
               "dist/NeoShell-${{ needs.validate.outputs.version }}.apk#NeoShell-${{ needs.validate.outputs.version }}.apk" \
               "dist/NeoShell-${{ needs.validate.outputs.version }}.aab#NeoShell-${{ needs.validate.outputs.version }}.aab" \
               --title "NeoShell ${{ needs.validate.outputs.version }}" \
-              --notes-file "${{ needs.validate.outputs.notes_file }}"
+              --notes-file ".release/release-body.md"
           fi
 
   update-manifest:

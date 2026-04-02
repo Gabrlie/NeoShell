@@ -4,7 +4,7 @@
 
 /** 主题模式 */
 export type ThemeMode = 'system' | 'light' | 'dark';
-export type TerminalTheme = 'system' | 'light' | 'dark';
+export type TerminalTheme = 'theme' | 'system' | 'light' | 'dark';
 export type SensitiveActionMode = 'session' | 'always';
 
 /** 监控刷新间隔（秒） */
@@ -42,7 +42,7 @@ export interface AppSettings {
 /** 默认设置 */
 export const DEFAULT_SETTINGS: AppSettings = {
   themeMode: 'system',
-  terminalTheme: 'system',
+  terminalTheme: 'theme',
   terminalFontSize: 14,
   terminalFontFamily: 'default',
 

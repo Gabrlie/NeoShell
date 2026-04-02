@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AppSettings } from '@/types';
 import { DEFAULT_SETTINGS } from '@/types';
 import { normalizeTerminalFontFamily } from './terminalFontProfile';
+import { normalizeTerminalTheme } from './terminalAppearance';
 
 const SETTINGS_STORAGE_KEY = '@neoshell/settings';
 
@@ -30,7 +31,7 @@ function migrateLegacySettings(settings: LegacySettings): Partial<AppSettings> {
     sensitiveActionMode:
       settings.sensitiveActionMode ?? DEFAULT_SETTINGS.sensitiveActionMode,
     terminalTheme:
-      settings.terminalTheme ?? DEFAULT_SETTINGS.terminalTheme,
+      normalizeTerminalTheme(settings.terminalTheme ?? DEFAULT_SETTINGS.terminalTheme),
     terminalFontFamily: normalizeTerminalFontFamily(
       settings.terminalFontFamily ?? DEFAULT_SETTINGS.terminalFontFamily
     ),

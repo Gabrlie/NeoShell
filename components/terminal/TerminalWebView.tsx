@@ -43,7 +43,7 @@ export interface TerminalWebViewRef {
 
 export const TerminalWebView = forwardRef<TerminalWebViewRef, TerminalWebViewProps>(
   function TerminalWebView({ onInput, onReady, onFocusRequest, onPlainText, onLongPress, unavailableMessage }, ref) {
-    const { colors } = useTheme();
+    const { colors, colorScheme } = useTheme();
     const systemScheme = useColorScheme();
     const terminalTheme = useSettingsStore((state) => state.terminalTheme);
     const terminalFontSize = useSettingsStore((state) => state.terminalFontSize);
@@ -57,10 +57,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewRef, TerminalWebViewPro
       () =>
         resolveTerminalAppearance({
           terminalTheme,
+          appColorScheme: colorScheme,
           systemColorScheme: normalizedSystemScheme,
           accent: colors.accent,
         }),
-      [colors.accent, normalizedSystemScheme, terminalTheme],
+      [colorScheme, colors.accent, normalizedSystemScheme, terminalTheme],
     );
     const terminalFontProfile = useMemo(
       () => resolveTerminalFontProfile(terminalFontFamily),

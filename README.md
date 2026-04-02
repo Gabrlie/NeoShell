@@ -13,6 +13,16 @@ NeoShell is a mobile server management app built for personal operations workflo
 - Security features including app lock, biometric-first verification, and private key management
 - Light and dark themes with configurable terminal appearance
 
+## Preview
+
+| Home | Monitor Detail | Terminal |
+| --- | --- | --- |
+| <img src="./docs/screenshots/home.jpg" alt="Home" width="220" /> | <img src="./docs/screenshots/monitor-detail.jpg" alt="Monitor Detail" width="220" /> | <img src="./docs/screenshots/terminal.jpg" alt="Terminal" width="220" /> |
+
+| Files | Docker | Settings |
+| --- | --- | --- |
+| <img src="./docs/screenshots/files.jpg" alt="Files" width="220" /> | <img src="./docs/screenshots/docker.jpg" alt="Docker" width="220" /> | <img src="./docs/screenshots/settings.jpg" alt="Settings" width="220" /> |
+
 ## Tech Stack
 
 - Expo SDK 55
@@ -38,7 +48,7 @@ NeoShell/
 ├── types/            # TypeScript types
 ├── LICENSE
 ├── README.md
-└── README.zh-CN.md
+└── README.zh.md
 ```
 
 ## Roadmap
@@ -48,6 +58,8 @@ NeoShell/
 - [ ] Docker image update detection
 - [ ] Docker image builds
 - [ ] More themes and fonts
+- [ ] Import and export
+- [ ] WebDAV backup configuration
 
 ## Getting Started
 
