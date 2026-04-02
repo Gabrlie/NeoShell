@@ -6,7 +6,6 @@
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type TerminalTheme = 'system' | 'light' | 'dark';
 export type SensitiveActionMode = 'session' | 'always';
-export type UpdateMirrorSourceKey = 'github' | 'custom';
 
 /** 监控刷新间隔（秒） */
 export type RefreshInterval = 5 | 15 | 30 | 60;
@@ -38,11 +37,6 @@ export interface AppSettings {
   sensitiveActionMode: SensitiveActionMode;
   biometricPreferredEnabled: boolean;
   sessionTimeout: number;
-
-  // 更新
-  updateMirrorSource: UpdateMirrorSourceKey;
-  customUpdateMirrorApiBaseUrl: string;
-  customUpdateMirrorDownloadBaseUrl: string;
 }
 
 /** 默认设置 */
@@ -68,10 +62,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sensitiveActionMode: 'session',
   biometricPreferredEnabled: false,
   sessionTimeout: 300,
-
-  updateMirrorSource: 'github',
-  customUpdateMirrorApiBaseUrl: '',
-  customUpdateMirrorDownloadBaseUrl: '',
 };
 
 /** 命令片段 */

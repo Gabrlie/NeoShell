@@ -1,14 +1,14 @@
 diff --git a/node_modules/@react-native-async-storage/async-storage/android/build.gradle b/node_modules/@react-native-async-storage/async-storage/android/build.gradle
-index 1111111..2222222 100644
+index 4560dc7..683b58b 100644
 --- a/node_modules/@react-native-async-storage/async-storage/android/build.gradle
 +++ b/node_modules/@react-native-async-storage/async-storage/android/build.gradle
-@@ -78,6 +78,9 @@ android {
+@@ -93,6 +93,9 @@ android {
  }
  
  repositories {
 +    maven {
 +        url("$projectDir/local_repo")
 +    }
-     mavenCentral()
-     google()
- }
+     maven {
+         // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
+         url "${project.ext.resolveModulePath("react-native")}/android"

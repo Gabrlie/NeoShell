@@ -13,6 +13,9 @@ const SETTINGS_STORAGE_KEY = '@neoshell/settings';
 type LegacySettings = Partial<AppSettings> & {
   appLockEnabled?: boolean;
   biometricEnabled?: boolean;
+  updateMirrorSource?: string;
+  customUpdateMirrorApiBaseUrl?: string;
+  customUpdateMirrorDownloadBaseUrl?: string;
 };
 
 function migrateLegacySettings(settings: LegacySettings): Partial<AppSettings> {
@@ -31,12 +34,6 @@ function migrateLegacySettings(settings: LegacySettings): Partial<AppSettings> {
     terminalFontFamily: normalizeTerminalFontFamily(
       settings.terminalFontFamily ?? DEFAULT_SETTINGS.terminalFontFamily
     ),
-    updateMirrorSource:
-      settings.updateMirrorSource ?? DEFAULT_SETTINGS.updateMirrorSource,
-    customUpdateMirrorApiBaseUrl:
-      settings.customUpdateMirrorApiBaseUrl ?? DEFAULT_SETTINGS.customUpdateMirrorApiBaseUrl,
-    customUpdateMirrorDownloadBaseUrl:
-      settings.customUpdateMirrorDownloadBaseUrl ?? DEFAULT_SETTINGS.customUpdateMirrorDownloadBaseUrl,
   };
 }
 

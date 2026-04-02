@@ -1,0 +1,87 @@
+name: Publish OTA Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_version:
+        description: 当前热更新基线版本，例如 1.0.0
+        required: true
+        type: string
+      notes_file:
+        description: 仓库内更新说明文件路径，例如 release-notes/ota/1.0.0/fix-login.md
+        required: true
+        type: string
+      title:
+        description: 可选，自定义热更新标题
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ota-${{ github.event.inputs.base_version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate OTA metadata
+        id: meta
+        run: |
+          node ./scripts/release/validate-version.mjs \
+            --mode ota \
+            --base-version "${{ github.event.inputs.base_version }}" \
+            --notes-file "${{ github.event.inputs.notes_file }}" \
+            --title "${{ github.event.inputs.title }}" \
+            --output "$GITHUB_OUTPUT"
+
+      - name: Run CI checks
+        run: npm run ci:check
+
+      - name: Publish OTA update
+        run: |
+          mkdir -p .release
+          npx eas-cli update --channel production --platform android --non-interactive --message "${{ steps.meta.outputs.title }}" --json > .release/ota-update.json
+
+      - name: Update public updates manifest
+        run: |
+          node ./scripts/release/upsert-updates-manifest.mjs \
+            --type ota \
+            --version "${{ steps.meta.outputs.version }}" \
+            --runtime-version "${{ steps.meta.outputs.runtime_version }}" \
+            --title "${{ steps.meta.outputs.title }}" \
+            --notes-file "${{ steps.meta.outputs.notes_file }}" \
+            --channel production \
+            --metadata-file ".release/ota-update.json"
+
+      - name: Commit updates manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates-manifest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(update): publish ota for ${{ steps.meta.outputs.version }}"
+          git push origin master

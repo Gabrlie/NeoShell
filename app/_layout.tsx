@@ -275,6 +275,10 @@ function RootLayoutNav() {
           options={{ title: '数据管理', headerBackTitle: '返回' }}
         />
         <Stack.Screen
+          name="settings/updates"
+          options={{ title: '更新', headerBackTitle: '返回' }}
+        />
+        <Stack.Screen
           name="settings/about"
           options={{ title: '关于', headerBackTitle: '返回' }}
         />

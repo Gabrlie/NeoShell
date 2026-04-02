@@ -6,5 +6,6 @@ export * from './server';
 export * from './monitor';
 export * from './docker';
 export * from './settings';
+export * from './update';
 export * from './credential';
 export * from './file';

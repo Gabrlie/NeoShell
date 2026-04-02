@@ -1,6 +1,7 @@
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 
 import { useTheme } from '@/hooks/useTheme';
 import {
@@ -45,9 +46,14 @@ export default function AboutScreen() {
           <Ionicons name="terminal" size={36} color={colors.accentText} />
         </View>
         <Text style={[styles.appName, { color: colors.text }]}>{APP_NAME}</Text>
-        <View style={[styles.appVersionBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.appVersionBadge, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => router.push('/settings/updates' as never)}
+          activeOpacity={0.8}
+        >
           <Text style={[styles.appVersion, { color: colors.text }]}>版本 {APP_VERSION}</Text>
-        </View>
+          <Ionicons name="chevron-forward" size={14} color={colors.textTertiary} />
+        </TouchableOpacity>
         <Text style={[styles.appTagline, { color: colors.textTertiary }]}>{APP_TAGLINE}</Text>
       </View>
 
@@ -146,6 +152,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   appTagline: {
     ...Typography.bodySmall,

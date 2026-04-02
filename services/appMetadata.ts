@@ -5,6 +5,10 @@ export const APP_AUTHOR_GITHUB_URL = 'https://github.com/Gabrlie';
 export const APP_AUTHOR_GRAVATAR_URL =
   'https://www.gravatar.com/avatar/d37334124f03eecbde02f27fd4bea109?s=256&d=identicon';
 export const APP_REPOSITORY_URL = 'https://github.com/gabrlie/neoshell';
+export const APP_DEFAULT_BRANCH = 'master';
+export const APP_RELEASES_URL = `${APP_REPOSITORY_URL}/releases`;
+export const APP_UPDATES_MANIFEST_URL =
+  'https://raw.githubusercontent.com/gabrlie/neoshell/master/updates-manifest.json';
 export const APP_LICENSE_NAME = 'MIT License';
 export const APP_LICENSE_SUMMARY = '允许商业和非商业使用、修改、分发与私有部署，但需保留原始版权与许可证声明。';
 
