@@ -1,6 +1,35 @@
 {
   "version": 1,
-  "generatedAt": "",
+  "generatedAt": "2026-04-02T07:46:13.102Z",
   "sourceUrl": "https://raw.githubusercontent.com/gabrlie/neoshell/main/updates-manifest.json",
-  "entries": []
+  "entries": [
+    {
+      "id": "release-v1.0.1",
+      "type": "release",
+      "title": "NeoShell 1.0.1",
+      "version": "1.0.1",
+      "runtimeVersion": "1.0.1",
+      "publishedAt": "2026-04-02T07:46:12.810Z",
+      "notes": "# NeoShell 1.0.1\n\n- 修复 Android 正式构建中 `react-native-ssh-sftp` 与 `expo-updates` 的 Bouncy Castle 依赖冲突\n- 保留现有 SSH / SFTP 功能补丁，同时清理补丁中的构建产物，确保云端构建可复现\n- 继续提供服务器管理、安全验证、终端、文件管理、Docker 工作台与更新页面等核心能力",
+      "channel": "production",
+      "tag": "v1.0.1",
+      "releaseUrl": "https://github.com/Gabrlie/NeoShell/releases/tag/v1.0.1",
+      "assets": [
+        {
+          "kind": "apk",
+          "name": "NeoShell-1.0.1.apk",
+          "url": "https://github.com/Gabrlie/NeoShell/releases/download/v1.0.1/NeoShell-1.0.1.apk",
+          "sizeBytes": 101745789,
+          "sha256": "8e77e3a1b13e8ed4418e0d419bc2a5d998687ef8550ada5b5879ab5d4dd3e63b"
+        },
+        {
+          "kind": "aab",
+          "name": "NeoShell-1.0.1.aab",
+          "url": "https://github.com/Gabrlie/NeoShell/releases/download/v1.0.1/NeoShell-1.0.1.aab",
+          "sizeBytes": 71200747,
+          "sha256": "f02e744a5dd81c33ad6e50b5fee8ec5600a9f20994624f2e854e4e163db3fe66"
+        }
+      ]
+    }
+  ]
 }
