@@ -80,7 +80,19 @@ jobs:
       - name: Extract AAB metadata
         id: aab
         run: |
-          node --input-type=module -e "import fs from 'node:fs'; const parsed = JSON.parse(fs.readFileSync('.release/aab-build.json', 'utf8')); const build = Array.isArray(parsed) ? parsed[0] : parsed; const url = build?.artifacts?.buildUrl || build?.artifacts?.applicationArchiveUrl || ''; if (!url) throw new Error('Missing AAB artifact URL.'); fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${build?.id ?? ''}\nurl=${url}\n`);"
+          node --input-type=module - <<'EOF'
+          import fs from 'node:fs';
+
+          const parsed = JSON.parse(fs.readFileSync('.release/aab-build.json', 'utf8'));
+          const build = Array.isArray(parsed) ? parsed[0] : parsed;
+          const url = build?.artifacts?.buildUrl || build?.artifacts?.applicationArchiveUrl || '';
+
+          if (!url) {
+            throw new Error('Missing AAB artifact URL.');
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'id=' + (build?.id ?? '') + '\nurl=' + url + '\n');
+          EOF
 
       - name: Build Android APK
         run: npx eas-cli build --platform android --profile production-apk --non-interactive --wait --json > .release/apk-build.json
@@ -88,7 +100,19 @@ jobs:
       - name: Extract APK metadata
         id: apk
         run: |
-          node --input-type=module -e "import fs from 'node:fs'; const parsed = JSON.parse(fs.readFileSync('.release/apk-build.json', 'utf8')); const build = Array.isArray(parsed) ? parsed[0] : parsed; const url = build?.artifacts?.buildUrl || build?.artifacts?.applicationArchiveUrl || ''; if (!url) throw new Error('Missing APK artifact URL.'); fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${build?.id ?? ''}\nurl=${url}\n`);"
+          node --input-type=module - <<'EOF'
+          import fs from 'node:fs';
+
+          const parsed = JSON.parse(fs.readFileSync('.release/apk-build.json', 'utf8'));
+          const build = Array.isArray(parsed) ? parsed[0] : parsed;
+          const url = build?.artifacts?.buildUrl || build?.artifacts?.applicationArchiveUrl || '';
+
+          if (!url) {
+            throw new Error('Missing APK artifact URL.');
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'id=' + (build?.id ?? '') + '\nurl=' + url + '\n');
+          EOF
 
       - name: Download Android artifacts
         run: |
