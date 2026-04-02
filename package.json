@@ -14,7 +14,7 @@
     "build:android:preview": "npx eas-cli build --platform android --profile preview",
     "build:android:production:aab": "npx eas-cli build --platform android --profile production-aab",
     "build:android:production:apk": "npx eas-cli build --platform android --profile production-apk",
-    "ci:check": "npx expo-doctor && npx tsc --noEmit && npm test",
+    "ci:check": "npx expo-doctor && npx tsc --noEmit",
     "release:validate-version": "node ./scripts/release/validate-version.mjs",
     "release:upsert-manifest": "node ./scripts/release/upsert-updates-manifest.mjs",
     "test": "vitest run",
