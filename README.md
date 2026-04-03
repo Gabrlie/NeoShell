@@ -55,11 +55,17 @@ NeoShell/
 
 - [ ] Monitoring detail widgets
 - [ ] File and directory permission management
+- [ ] Persistent background terminal sessions
+- [ ] Full terminal keyboard support
 - [ ] Docker image update detection
 - [ ] Docker image builds
 - [ ] More themes and fonts
 - [ ] Import and export
 - [ ] WebDAV backup configuration
+
+## Community
+
+Learn AI on [LinuxDO](https://linux.do/)
 
 ## Getting Started
 
